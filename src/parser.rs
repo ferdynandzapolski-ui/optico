@@ -37,6 +37,42 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_decl(&mut self) -> Decl {
+        if self.current_token == Token::Struct {
+            self.advance();
+            let name = match &self.current_token {
+                Token::Ident(n) => n.clone(),
+                _ => panic!("Expected struct name"),
+            };
+            self.advance();
+            self.expect(Token::LBrace);
+            let mut fields = Vec::new();
+            while self.current_token != Token::RBrace {
+                let f_ty = self.parse_type();
+                let f_name = match &self.current_token {
+                    Token::Ident(n) => n.clone(),
+                    _ => panic!("Expected field name"),
+                };
+                self.advance();
+                self.expect(Token::Semi);
+                fields.push((f_name, f_ty));
+            }
+            self.expect(Token::RBrace);
+            return Decl::Struct { name, fields };
+        }
+
+        if self.current_token == Token::ResourceKw {
+            self.advance();
+            let ty = self.parse_type();
+            let name = match &self.current_token {
+                Token::Ident(n) => n.clone(),
+                _ => panic!("Expected resource name"),
+            };
+            self.advance();
+            self.expect(Token::Assign);
+            let val = self.parse_expr();
+            return Decl::Resource { name, ty, val };
+        }
+
         let ty = self.parse_type();
         let name = match &self.current_token {
             Token::Ident(n) => n.clone(),
@@ -110,7 +146,7 @@ impl<'a> Parser<'a> {
             Token::Ident(n) => {
                 let name = n.clone();
                 self.advance();
-                Type::Struct(vec![(name, Type::Void)]) // Placeholder
+                Type::Named(name)
             }
             _ => panic!("Unexpected token in type: {:?}", self.current_token),
         };
@@ -185,7 +221,7 @@ impl<'a> Parser<'a> {
             Token::Alloc => {
                 self.advance();
                 self.expect(Token::LAngle);
-                let ty = self.parse_type();
+                let _ty = self.parse_type();
                 self.expect(Token::RAngle);
                 self.expect(Token::LParen);
                 let mut args = Vec::new();
@@ -196,7 +232,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.expect(Token::RParen);
-                Expr::Alloc(ty, args)
+                Expr::Alloc(_ty, args)
             }
             Token::Free => {
                 self.advance();
@@ -211,7 +247,7 @@ impl<'a> Parser<'a> {
             }
             Token::ResourceKw => {
                 self.advance();
-                let ty = self.parse_type();
+                let _ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
                     _ => panic!("Expected resource name"),
@@ -280,5 +316,39 @@ mod tests {
         let mut parser = Parser::new(input);
         let prog = parser.parse_program();
         assert_eq!(prog.decls.len(), 1);
+    }
+
+    #[test]
+    fn test_struct_parser() {
+        let input = "struct Point { int x; int y; }";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
+        match &prog.decls[0] {
+            Decl::Struct { name, fields } => {
+                assert_eq!(name, "Point");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].0, "x");
+                assert_eq!(fields[0].1, Type::Int);
+                assert_eq!(fields[1].0, "y");
+                assert_eq!(fields[1].1, Type::Int);
+            }
+            _ => panic!("Expected Struct declaration"),
+        }
+    }
+
+    #[test]
+    fn test_top_level_resource_parser() {
+        let input = "resource Console console = alloc<Console>(1);";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
+        match &prog.decls[0] {
+            Decl::Resource { name, ty, .. } => {
+                assert_eq!(name, "console");
+                assert_eq!(*ty, Type::Named("Console".to_string()));
+            }
+            _ => panic!("Expected Resource declaration"),
+        }
     }
 }

@@ -6,6 +6,7 @@ pub enum Type {
     Char,
     Void,
     Struct(Vec<(String, Type)>),
+    Named(String),             // RFC 001: Reference to a named struct
     Resource(Vec<(String, Type)>),
     Co(Box<Type>),             // co τ
     Optic(Box<Type>),          // optic τ*
@@ -31,7 +32,7 @@ pub enum Expr {
     Get(Box<Expr>),            // *e
     Put(Box<Expr>, Box<Expr>), // e1 := e2
     Compose(Box<Expr>, Box<Expr>), // e1 | e2
-    ResourceDecl(String, Box<Expr>), // resource r = e
+    ResourceDecl(String, Box<Expr>), // resource r = e (local)
     Unsafe(Box<Expr>),         // unsafe { e }
     Checked(Box<Expr>),        // checked (e)
     Spawn(Box<Expr>),          // spawn { e }
@@ -46,6 +47,15 @@ pub enum Decl {
         params: Vec<(String, Type)>,
         ret_type: Type,
         body: Expr,
+    },
+    Struct {                  // RFC 001: Named struct declaration
+        name: String,
+        fields: Vec<(String, Type)>,
+    },
+    Resource {                // RFC 002: Top-level resource declaration
+        name: String,
+        ty: Type,
+        val: Expr,
     },
     Global(String, Type, Option<Expr>),
 }

@@ -1,0 +1,21 @@
+// std/prelude.oco - Standard Prelude for OptiCo v0.3
+
+struct Unit {}
+
+struct Pair {
+    int fst;
+    int snd;
+}
+
+// Basic optics (placeholders for intrinsic support)
+optic int* id(optic int* o) {
+    o
+}
+
+optic int* left(optic Pair* p) {
+    p->fst
+}
+
+optic int* right(optic Pair* p) {
+    p->snd
+}
