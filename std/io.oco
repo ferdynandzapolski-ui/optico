@@ -18,3 +18,17 @@ void print_int(int val) {
 void print_char(char val) {
     // intrinsic
 }
+
+char read_char() {
+    // intrinsic: reads from console
+    ' '
+}
+
+void write_char(char c) {
+    // intrinsic: outputs char to console
+}
+
+// Example print_string (requires std/string.oco)
+void print_string(int len, pointer<char, Heap> data) {
+    // loop and print_char (simplified)
+}

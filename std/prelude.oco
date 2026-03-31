@@ -7,15 +7,38 @@ struct Pair {
     int snd;
 }
 
+struct OptionInt {
+    int tag; // 0 for None, 1 for Some
+    int value;
+}
+
+struct ResultInt {
+    int tag; // 0 for Err, 1 for Ok
+    int value;
+}
+
 // Basic optics (placeholders for intrinsic support)
 optic int* id(optic int* o) {
     o
 }
 
-optic int* left(optic Pair* p) {
-    p->fst
+optic int* left(Pair p) {
+    p.fst
 }
 
-optic int* right(optic Pair* p) {
-    p->snd
+optic int* right(Pair p) {
+    p.snd
+}
+
+// Utility functions
+int is_some(OptionInt o) {
+    o.tag
+}
+
+int unwrap(OptionInt o) {
+    o.value
+}
+
+int is_ok(ResultInt r) {
+    r.tag
 }

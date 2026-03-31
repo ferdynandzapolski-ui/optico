@@ -1,0 +1,19 @@
+// std/list.oco - Linked List library for OptiCo v0.3
+
+struct ListNode {
+    int val;
+    optic ListNode* next;
+}
+
+struct List {
+    optic ListNode* head;
+}
+
+// Productive recursive list traversal
+rec optic int* list_at(optic ListNode* node, int index) {
+    {
+        // Basic logic using Nakano's later modality (next) to ensure productivity
+        // Note: The logic here is symbolic of how it's handled in OptiCo v0.3
+        node->val | next list_at(node->next, index)
+    }
+}
