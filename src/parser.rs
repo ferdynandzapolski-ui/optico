@@ -119,16 +119,49 @@ impl<'a> Parser<'a> {
             Token::CharType => { self.advance(); Type::Char }
             Token::VoidType => { self.advance(); Type::Void }
             Token::Co => { self.advance(); Type::Co(Box::new(self.parse_type())) }
-            Token::Optic => { self.advance(); Type::Optic(Box::new(self.parse_type())) }
+            Token::Optic => {
+                self.advance();
+                let inner = self.parse_type();
+                let mut res_assoc = None;
+                if self.current_token == Token::Bang {
+                    self.advance();
+                    res_assoc = match &self.current_token {
+                        Token::Ident(n) => Some(n.clone()),
+                        _ => panic!("Expected resource name after !"),
+                    };
+                    self.advance();
+                }
+                Type::Optic(Box::new(inner), res_assoc)
+            }
             Token::Rec => {
                 self.advance();
                 self.expect(Token::Optic);
-                Type::RecOptic(Box::new(self.parse_type()))
+                let inner = self.parse_type();
+                let mut res_assoc = None;
+                if self.current_token == Token::Bang {
+                    self.advance();
+                    res_assoc = match &self.current_token {
+                        Token::Ident(n) => Some(n.clone()),
+                        _ => panic!("Expected resource name after !"),
+                    };
+                    self.advance();
+                }
+                Type::RecOptic(Box::new(inner), res_assoc)
             }
             Token::Atomic => {
                 self.advance();
                 self.expect(Token::Optic);
-                Type::AtomicOptic(Box::new(self.parse_type()))
+                let inner = self.parse_type();
+                let mut res_assoc = None;
+                if self.current_token == Token::Bang {
+                    self.advance();
+                    res_assoc = match &self.current_token {
+                        Token::Ident(n) => Some(n.clone()),
+                        _ => panic!("Expected resource name after !"),
+                    };
+                    self.advance();
+                }
+                Type::AtomicOptic(Box::new(inner), res_assoc)
             }
             Token::Pointer => {
                 self.advance();
@@ -146,14 +179,25 @@ impl<'a> Parser<'a> {
             Token::Ident(n) => {
                 let name = n.clone();
                 self.advance();
-                Type::Named(name)
+                if self.current_token == Token::LBracket {
+                    self.advance();
+                    let state = match &self.current_token {
+                        Token::Ident(s) => s.clone(),
+                        _ => panic!("Expected state name in []"),
+                    };
+                    self.advance();
+                    self.expect(Token::RBracket);
+                    Type::Resource(vec![], Some(state)) // In v0.3 Type::Resource uses fields, but often referred by Name[State]
+                } else {
+                    Type::Named(name)
+                }
             }
             _ => panic!("Unexpected token in type: {:?}", self.current_token),
         };
 
         while self.current_token == Token::Star {
             self.advance();
-            ty = Type::Optic(Box::new(ty));
+            ty = Type::Optic(Box::new(ty), None);
         }
 
         ty
@@ -339,16 +383,36 @@ mod tests {
 
     #[test]
     fn test_top_level_resource_parser() {
-        let input = "resource Console console = alloc<Console>(1);";
+        let input = "resource Console[Open] console = alloc<Console>(1);";
         let mut parser = Parser::new(input);
         let prog = parser.parse_program();
         assert_eq!(prog.decls.len(), 1);
         match &prog.decls[0] {
             Decl::Resource { name, ty, .. } => {
                 assert_eq!(name, "console");
-                assert_eq!(*ty, Type::Named("Console".to_string()));
+                assert_eq!(*ty, Type::Resource(vec![], Some("Open".to_string())));
             }
             _ => panic!("Expected Resource declaration"),
+        }
+    }
+
+    #[test]
+    fn test_optic_association_parser() {
+        let input = "optic char*!f buffer;";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
+        match &prog.decls[0] {
+            Decl::Global(name, ty, _) => {
+                assert_eq!(name, "buffer");
+                match ty {
+                    Type::Optic(inner, assoc) => {
+                        assert_eq!(assoc, &Some("f".to_string()));
+                    }
+                    _ => panic!("Expected Optic type"),
+                }
+            }
+            _ => panic!("Expected Global declaration"),
         }
     }
 }
