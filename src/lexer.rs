@@ -11,6 +11,7 @@ pub enum Token {
     CharLit(char),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket, LAngle, RAngle,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
+    Bang,
     EOF,
 }
 
@@ -80,6 +81,7 @@ impl<'a> Lexer<'a> {
             '*' => Token::Star,
             '=' => Token::Assign,
             '|' => Token::Pipe,
+            '!' => Token::Bang,
             '-' if self.peek() == Some('>') => {
                 self.advance();
                 Token::Arrow

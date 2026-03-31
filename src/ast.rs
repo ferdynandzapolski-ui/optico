@@ -7,12 +7,12 @@ pub enum Type {
     Void,
     Struct(Vec<(String, Type)>),
     Named(String),             // RFC 001: Reference to a named struct
-    Resource(Vec<(String, Type)>),
+    Resource(Vec<(String, Type)>, Option<String>),
     Co(Box<Type>),             // co τ
-    Optic(Box<Type>),          // optic τ*
+    Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
     Later(Box<Type>),          // I τ
-    RecOptic(Box<Type>),       // rec optic τ*
-    AtomicOptic(Box<Type>),    // atomic optic τ*
+    RecOptic(Box<Type>, Option<String>),       // rec optic τ* (with optional resource association)
+    AtomicOptic(Box<Type>, Option<String>),    // atomic optic τ* (with optional resource association)
     Pointer(Box<Type>, String), // pointer<τ, ContextID>
 }
 
