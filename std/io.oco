@@ -1,0 +1,20 @@
+// std/io.oco - Input/Output resources for OptiCo v0.3
+
+struct File {
+    int fd;
+}
+
+struct Console {
+    int id;
+}
+
+// Global console resource
+resource Console console = alloc<Console>(1);
+
+void print_int(int val) {
+    // intrinsic: outputs val to console
+}
+
+void print_char(char val) {
+    // intrinsic
+}

@@ -4,24 +4,17 @@ use app::cir::CIRLowerer;
 use app::codegen::CodeGenerator;
 
 fn main() {
-    let example_a_sim = "
-        rec optic int* list_sum(optic ListNode* node) {
-            node->data | (next list_sum(node->next))
-        }
-    ";
+    let example_std = "
+        struct Point { int x; int y; }
+        resource Point console = alloc<Point>(1, 2);
 
-    // Wait, node->data is Access(Var(node), data)
-    // next is a prefix operator, but I'm calling it in a block.
-
-    let example_c = "
         void main() {
-            resource File* f = alloc<File>(0);
-            co char* first = f;
-            first := 65;
+            co Point* p = console;
+            int val = p->x;
         }
     ";
 
-    let mut parser = Parser::new(example_c);
+    let mut parser = Parser::new(example_std);
     let prog = parser.parse_program();
 
     let mut sema = Sema::new();
@@ -30,5 +23,5 @@ fn main() {
     let cir = CIRLowerer::lower_program(&prog);
     let code = CodeGenerator::generate(&cir);
 
-    println!("Example C CIR:\n{}", code);
+    println!("Example STD CIR:\n{}", code);
 }

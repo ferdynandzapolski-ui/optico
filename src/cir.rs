@@ -14,6 +14,8 @@ pub enum CIROp {
     Call(String, Vec<CIROp>),
     Spawn(Box<CIROp>),
     Block(Vec<CIROp>),
+    StructDecl(String, Vec<(String, Type)>), // RFC 001
+    ResourceDecl(String, Type, Box<CIROp>),  // RFC 002
 }
 
 pub struct CIRLowerer;
@@ -22,8 +24,21 @@ impl CIRLowerer {
     pub fn lower_program(prog: &Program) -> Vec<CIROp> {
         let mut ops = Vec::new();
         for decl in &prog.decls {
-            if let Decl::Func { body, .. } = decl {
-                ops.push(Self::lower_expr(body));
+            match decl {
+                Decl::Func { body, .. } => {
+                    ops.push(Self::lower_expr(body));
+                }
+                Decl::Struct { name, fields } => {
+                    ops.push(CIROp::StructDecl(name.clone(), fields.clone()));
+                }
+                Decl::Resource { name, ty, val } => {
+                    ops.push(CIROp::ResourceDecl(name.clone(), ty.clone(), Box::new(Self::lower_expr(val))));
+                }
+                Decl::Global(name, _, val) => {
+                    if let Some(v) = val {
+                        ops.push(CIROp::Store(name.clone(), Box::new(Self::lower_expr(v))));
+                    }
+                }
             }
         }
         ops

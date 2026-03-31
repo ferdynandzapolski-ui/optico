@@ -51,6 +51,17 @@ impl CodeGenerator {
                 s.push_str(&format!("{}}}", pad));
                 s
             }
+            CIROp::StructDecl(name, fields) => {
+                let mut s = format!("{}struct {} {{\n", pad, name);
+                for (f_name, f_ty) in fields {
+                    s.push_str(&format!("{}  {:?} {};\n", pad, f_ty, f_name));
+                }
+                s.push_str(&format!("{}}}", pad));
+                s
+            }
+            CIROp::ResourceDecl(name, ty, val) => {
+                format!("{}resource {:?} {} = (\n{}{})", pad, ty, name, Self::gen_op(val, indent + 1), pad)
+            }
         }
     }
 }

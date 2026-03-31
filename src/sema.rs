@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 pub struct Sema {
     pub globals: HashMap<String, Type>,
+    pub structs: HashMap<String, Vec<(String, Type)>>, // RFC 001: Struct definitions
     pub resources: HashSet<String>,
     pub in_rec_optic: bool,
     pub guarded: bool,
@@ -12,6 +13,7 @@ impl Sema {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
+            structs: HashMap::new(),
             resources: HashSet::new(),
             in_rec_optic: false,
             guarded: false,
@@ -27,26 +29,42 @@ impl Sema {
                 Decl::Func { name, ret_type, .. } => {
                     self.globals.insert(name.clone(), ret_type.clone());
                 }
+                Decl::Struct { name, fields } => {
+                    self.structs.insert(name.clone(), fields.clone());
+                }
+                Decl::Resource { name, ty, .. } => {
+                    self.globals.insert(name.clone(), ty.clone());
+                    self.resources.insert(name.clone());
+                }
             }
         }
 
         for decl in &prog.decls {
-            if let Decl::Func { body, params, ret_type, .. } = decl {
-                let mut env = self.globals.clone();
-                for (p_name, p_ty) in params {
-                    env.insert(p_name.clone(), p_ty.clone());
+            match decl {
+                Decl::Func { body, params, ret_type, .. } => {
+                    let mut env = self.globals.clone();
+                    for (p_name, p_ty) in params {
+                        env.insert(p_name.clone(), p_ty.clone());
+                    }
+
+                    let old_in_rec = self.in_rec_optic;
+                    self.in_rec_optic = matches!(ret_type, Type::RecOptic(_));
+                    self.guarded = false;
+
+                    let mut res_consumed = HashSet::new();
+                    let mut local_resources = HashSet::new();
+
+                    self.check_expr(body, &mut env, &mut res_consumed, &mut local_resources);
+
+                    self.in_rec_optic = old_in_rec;
                 }
-
-                let old_in_rec = self.in_rec_optic;
-                self.in_rec_optic = matches!(ret_type, Type::RecOptic(_));
-                self.guarded = false;
-
-                let mut res_consumed = HashSet::new();
-                let mut local_resources = HashSet::new();
-
-                self.check_expr(body, &mut env, &mut res_consumed, &mut local_resources);
-
-                self.in_rec_optic = old_in_rec;
+                Decl::Resource { val, .. } => {
+                    let mut env = self.globals.clone();
+                    let mut res_consumed = HashSet::new();
+                    let mut local_resources = HashSet::new();
+                    self.check_expr(val, &mut env, &mut res_consumed, &mut local_resources);
+                }
+                _ => {}
             }
         }
     }
@@ -139,9 +157,18 @@ impl Sema {
                 }
                 Type::Void
             }
-            Expr::Access(e, _) => {
-                self.check_expr(e, env, res_consumed, local_resources);
-                Type::Int // simplified focus
+            Expr::Access(e, field) => {
+                let ty = self.check_expr(e, env, res_consumed, local_resources);
+                match ty {
+                    Type::Named(name) => {
+                        let fields = self.structs.get(&name).expect(&format!("Undefined struct {}", name));
+                        fields.iter().find(|(f, _)| f == field).map(|(_, t)| t.clone()).expect(&format!("Field {} not found in struct {}", field, name))
+                    }
+                    Type::Struct(fields) => {
+                        fields.iter().find(|(f, _)| f == field).map(|(_, t)| t.clone()).expect(&format!("Field {} not found in anonymous struct", field))
+                    }
+                    _ => panic!("Access requires struct type, found {:?}", ty),
+                }
             }
             Expr::Compose(e1, e2) => {
                 self.check_expr(e1, env, res_consumed, local_resources);
@@ -203,5 +230,25 @@ mod tests {
 
         let expr = Expr::Next(Box::new(Expr::Call(Box::new(Expr::Var("f".to_string())), vec![])));
         sema.check_expr(&expr, &mut env, &mut consumed, &mut locals);
+    }
+
+    #[test]
+    fn test_nominal_struct_sema() {
+        let mut sema = Sema::new();
+        let prog = Program {
+            decls: vec![
+                Decl::Struct {
+                    name: "Point".to_string(),
+                    fields: vec![("x".to_string(), Type::Int), ("y".to_string(), Type::Int)],
+                },
+                Decl::Func {
+                    name: "get_x".to_string(),
+                    params: vec![("p".to_string(), Type::Named("Point".to_string()))],
+                    ret_type: Type::Int,
+                    body: Expr::Access(Box::new(Expr::Var("p".to_string())), "x".to_string()),
+                }
+            ],
+        };
+        sema.check_program(&prog);
     }
 }
