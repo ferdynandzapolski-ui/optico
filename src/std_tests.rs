@@ -5,8 +5,11 @@ mod tests {
     use std::fs;
 
     fn check_file(path: &str) {
-        let content = fs::read_to_string(path).expect(&format!("Could not read {}", path));
-        let mut parser = Parser::new(&content);
+        let mut full_content = fs::read_to_string("std/prelude.oco").unwrap();
+        if path != "std/prelude.oco" {
+            full_content.push_str(&fs::read_to_string(path).expect(&format!("Could not read {}", path)));
+        }
+        let mut parser = Parser::new(&full_content);
         let prog = parser.parse_program();
         let mut sema = Sema::new();
         sema.check_program(&prog);

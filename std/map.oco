@@ -10,11 +10,22 @@ struct MapNode {
     optic MapNode* next;
 }
 
+struct Map {
+    optic MapNode* head;
+}
+
 // Recursive map lookup
 int map_get(optic MapNode* node, int key) {
     {
-        // Note: Symbolic representation using Nakano's productivity guards if needed
-        // but here simply following the linked list.
+        // TODO: Base case for key comparison
         node->entry.value | next map_get(node->next, key)
+    }
+}
+
+// Recursive map insertion demonstrating productive recursion
+rec optic MapNode* map_insert(optic MapNode* node, int key, int value) {
+    {
+        // TODO: Actual insertion logic and key check
+        node->next | next map_insert(node->next, key, value)
     }
 }

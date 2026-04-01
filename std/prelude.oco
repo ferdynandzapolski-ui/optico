@@ -12,9 +12,41 @@ struct OptionInt {
     int value;
 }
 
+struct OptionChar {
+    int tag;
+    char value;
+}
+
+struct OptionBool {
+    int tag;
+    bool value;
+}
+
 struct ResultInt {
     int tag; // 0 for Err, 1 for Ok
     int value;
+}
+
+struct ResultVoid {
+    int tag;
+}
+
+struct String {
+    int len;
+    pointer<char, Heap> data;
+}
+
+struct Token {
+    int tag;
+    String lexeme;
+    int line;
+}
+
+struct ASTNode {
+    int tag;
+    int value;
+    rec optic ASTNode* left;
+    rec optic ASTNode* right;
 }
 
 // Basic optics (placeholders for intrinsic support)

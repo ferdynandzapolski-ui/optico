@@ -1,6 +1,14 @@
 // std/io.oco - Input/Output resources for OptiCo v0.3
 
-struct File {
+protocol File {
+    state Open {
+        optic int* read;
+        optic int* write;
+    }
+    state Closed {}
+}
+
+struct FileObj {
     int fd;
 }
 
@@ -28,7 +36,15 @@ void write_char(char c) {
     // intrinsic: outputs char to console
 }
 
-// Example print_string (requires std/string.oco)
-void print_string(int len, pointer<char, Heap> data) {
+// Example print_string
+void print_string(String s) {
     // loop and print_char (simplified)
+}
+
+File[Open] file_open(String path) {
+    alloc<FileObj>(0)
+}
+
+void file_close(optic int*!f closer) {
+    closer := 0;
 }

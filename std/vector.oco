@@ -6,14 +6,23 @@ struct Vector {
     pointer<int, Heap> data;
 }
 
+Vector vector_new(int cap) {
+    alloc<Vector>(0, cap, alloc<int>(cap))
+}
+
 void vector_push(Vector v, int val) {
     {
-        // intrinsic or manual management
+        // TODO: Handle resizing and data insertion
         v.size := v.size + 1;
     }
 }
 
+void vector_set(Vector v, int i, int val) {
+    // TODO: v.data[i] := val;
+    v.size := val;
+}
+
 int vector_get(Vector v, int index) {
-    // pointer access placeholder
+    // TODO: return v.data[index];
     0
 }
