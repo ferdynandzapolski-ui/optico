@@ -29,8 +29,9 @@ The syntax introduces types for comonadic contexts, coinductive recursion, and t
 ```bnf
 τ ::= Int | Float | Bool | Char | Void
  | Struct{l_i : τ_i} | Resource Δ [Σ] // Durability Δ, Initial State Σ
- | co Δ τ                   // Comonadic context (Store) with Durability Δ
+ | co Δ <ContextID> τ       // Comonadic context (Store) with Durability Δ and Context
  | optic τ*                 // Coalgebraic view
+ | traversal τ*             // Coalgebraic array view
  | I τ                      // Nakano 'later' modality
  | rec optic τ*             // Coinductive recursive optic
  | atomic optic τ*          // Verified thread-safe optic
@@ -41,6 +42,7 @@ The syntax introduces types for comonadic contexts, coinductive recursion, and t
 e ::= x | C | e.l | e₁ | e₂
  | next e                   // Guarded recursion delay
  | prev e                   // Removal of later modality
+ | return e                 // Return from function
  | alloc<τ, Δ>() | free(e)  // Comonadic management with Durability
  | *e | e₁ := e₂             // Lawful Get/Put
  | resource r = e           // Must-consume linear resource
@@ -151,6 +153,31 @@ optic char* first = f->_buffer;
 // Any further access to f or first triggers a "Linearity Leak/Reuse" error
 ```
 
-## 9. Conclusion
+## 9. Standard C Interoperability (Pointer Lifting)
+
+OptiCo v0.3 supports direct interoperability with standard C code while maintaining safety guarantees through **Pointer Lifting**.
+
+### 9.1. Extern C Blocks
+Developers can import C functions and variables using `extern "C"` blocks.
+
+```c
+extern C {
+    void* malloc(int size);
+    void free(void* ptr);
+}
+```
+
+### 9.2. Neuro-Symbolic Intent Inference
+The compiler utilizes neuro-symbolic techniques to automatically lift raw C pointers into safe OptiCo views:
+- **Optic Lifting**: Pointers intended for single-object access are promoted to `optic T*`.
+- **Traversal Lifting**: Pointers used as arrays (e.g., matching naming patterns like `arr`) are promoted to `traversal T*`.
+
+### 9.3. C Heap Context (`C_context`)
+Legacy heap management is modeled using the `C_context` comonadic context. The compiler uses SSFG analysis to ensure that every `malloc` is balanced by a `free`, preventing leaks and double-frees in imported C code.
+
+### 9.4. Phantom Lifetime Stabilization
+OptiCo prevents stack pointers from escaping their function's activation record. Any attempt to return a pointer to a local variable or store it in a longer-lived context results in a **Phantom Lifetime Violation**.
+
+## 10. Conclusion
 
 OptiCo v0.3 provides a robust, formally verified alternative to traditional systems languages. By embedding safety directly into the coalgebraic structure of data access and leveraging GPU-accelerated formal methods, it achieves the "zero-cost safety" ideal for next-generation systems development.

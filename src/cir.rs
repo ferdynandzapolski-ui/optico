@@ -46,6 +46,17 @@ impl CIRLowerer {
                         ops.push(CIROp::Store(name.clone(), Box::new(Self::lower_expr(v))));
                     }
                 }
+                Decl::ExternC(decls) => {
+                    for d in decls {
+                        match d {
+                            Decl::Func { name, params: _, ret_type: _, body: _ } => {
+                                // Extern functions might not have bodies or just mock ones
+                                ops.push(CIROp::Call(name.clone(), vec![]));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
         ops

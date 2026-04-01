@@ -78,9 +78,39 @@ impl<'a> Parser<'a> {
             return self.parse_protocol_decl();
         }
 
+        if self.current_token == Token::Extern {
+            self.advance();
+            match &self.current_token {
+                Token::IntLit(_) | Token::FloatLit(_) | Token::BoolLit(_) | Token::CharLit(_) | Token::Ident(_) => {
+                    // Check for "C"
+                    if let Token::Ident(n) = &self.current_token {
+                        if n != "C" {
+                            panic!("Expected \"C\" after extern, found {}", n);
+                        }
+                    } else {
+                        panic!("Expected \"C\" after extern");
+                    }
+                }
+                _ => panic!("Expected \"C\" after extern"),
+            }
+            self.advance();
+            self.expect(Token::LBrace);
+            let mut decls = Vec::new();
+            while self.current_token != Token::RBrace {
+                decls.push(self.parse_decl());
+                if self.current_token == Token::Semi {
+                    self.advance();
+                }
+            }
+            self.expect(Token::RBrace);
+            return Decl::ExternC(decls);
+        }
+
         let ty = self.parse_type();
         let name = match &self.current_token {
             Token::Ident(n) => n.clone(),
+            Token::Free => "free".to_string(),
+            Token::Alloc => "alloc".to_string(),
             _ => panic!("Expected identifier after type, found {:?}", self.current_token),
         };
         self.advance();
@@ -102,7 +132,11 @@ impl<'a> Parser<'a> {
                 }
             }
             self.expect(Token::RParen);
-            let body = self.parse_expr();
+            let body = if self.current_token == Token::Semi {
+                Expr::Block(vec![])
+            } else {
+                self.parse_expr()
+            };
             Decl::Func { name, params, ret_type: ty, body }
         } else {
             // Global variable
@@ -161,6 +195,7 @@ impl<'a> Parser<'a> {
             Token::Co => {
                 self.advance();
                 let mut dur = None;
+                let mut ctx = None;
                 if let Token::Ident(n) = &self.current_token {
                     match n.as_str() {
                         "Volatile" => { dur = Some(crate::persistence::Durability::Volatile); self.advance(); }
@@ -169,7 +204,15 @@ impl<'a> Parser<'a> {
                         _ => {}
                     }
                 }
-                Type::Co(Box::new(self.parse_type()), dur)
+                if self.current_token == Token::LAngle {
+                    self.advance();
+                    if let Token::Ident(n) = &self.current_token {
+                        ctx = Some(n.clone());
+                        self.advance();
+                    }
+                    self.expect(Token::RAngle);
+                }
+                Type::Co(Box::new(self.parse_type()), dur, ctx)
             }
             Token::Optic => {
                 self.advance();
@@ -184,6 +227,20 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
                 Type::Optic(Box::new(inner), res_assoc)
+            }
+            Token::Traversal => {
+                self.advance();
+                let inner = self.parse_type();
+                let mut res_assoc = None;
+                if self.current_token == Token::Bang {
+                    self.advance();
+                    res_assoc = match &self.current_token {
+                        Token::Ident(n) => Some(n.clone()),
+                        _ => panic!("Expected resource name after !"),
+                    };
+                    self.advance();
+                }
+                Type::Traversal(Box::new(inner), res_assoc)
             }
             Token::Rec => {
                 self.advance();
@@ -240,12 +297,6 @@ impl<'a> Parser<'a> {
                             _ => unreachable!(),
                         };
 
-                        // We need to look ahead to see if it's a prefix or a type name
-                        // Lexer doesn't have lookahead beyond 1 char, but Parser has current_token.
-                        // If we advance, we must be sure it's a prefix.
-                        // A durability prefix is always followed by another Ident (the type name)
-                        // OR a Protocol name which is also an Ident.
-
                         let mut lex_copy = self.lexer.clone();
                         let next_token = lex_copy.next_token();
                         if let Token::Ident(_) = next_token {
@@ -277,6 +328,8 @@ impl<'a> Parser<'a> {
                     Type::Named(name)
                 }
             }
+            Token::Free => { self.advance(); Type::Named("free".to_string()) }
+            Token::Alloc => { self.advance(); Type::Named("alloc".to_string()) }
             _ => panic!("Unexpected token in type: {:?}", self.current_token),
         };
 
@@ -289,6 +342,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr(&mut self) -> Expr {
+        if self.current_token == Token::Return {
+            self.advance();
+            return Expr::Return(Box::new(self.parse_expr()));
+        }
         if self.current_token == Token::If {
             self.advance();
             self.expect(Token::LParen);
@@ -461,6 +518,13 @@ impl<'a> Parser<'a> {
                 self.expect(Token::RParen);
                 Expr::Free(Box::new(e))
             }
+            Token::Checked => {
+                self.advance();
+                self.expect(Token::LParen);
+                let e = self.parse_expr();
+                self.expect(Token::RParen);
+                Expr::Checked(Box::new(e))
+            }
             Token::Star => {
                 self.advance();
                 Expr::Get(Box::new(self.parse_expr()))
@@ -496,8 +560,8 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Expr::ConstChar(val)
             }
-            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Rec | Token::Atomic | Token::Struct => {
-                let ty = self.parse_type();
+            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct => {
+                let _ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
                     _ => panic!("Expected identifier after type in expr, found {:?}", self.current_token),
@@ -592,7 +656,7 @@ mod tests {
             Decl::Global(name, ty, _) => {
                 assert_eq!(name, "buffer");
                 match ty {
-                    Type::Optic(inner, assoc) => {
+                    Type::Optic(_inner, assoc) => {
                         assert_eq!(assoc, &Some("f".to_string()));
                     }
                     _ => panic!("Expected Optic type"),
@@ -608,5 +672,38 @@ mod tests {
         let mut parser = Parser::new(input);
         let prog = parser.parse_program();
         assert_eq!(prog.decls.len(), 1);
+    }
+
+    #[test]
+    fn test_extern_c_parser() {
+        let input = "extern C { void* malloc(int size); void free(void* ptr); }";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
+        match &prog.decls[0] {
+            Decl::ExternC(decls) => {
+                assert_eq!(decls.len(), 2);
+            }
+            _ => panic!("Expected ExternC declaration"),
+        }
+    }
+
+    #[test]
+    fn test_traversal_type_parser() {
+        let input = "traversal int* arr;";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
+        match &prog.decls[0] {
+            Decl::Global(_, ty, _) => {
+                match ty {
+                    Type::Traversal(inner, _) => {
+                        assert_eq!(**inner, Type::Optic(Box::new(Type::Int), None));
+                    }
+                    _ => panic!("Expected Traversal type"),
+                }
+            }
+            _ => panic!("Expected Global declaration"),
+        }
     }
 }
