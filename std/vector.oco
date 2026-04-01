@@ -1,0 +1,19 @@
+// std/vector.oco - Vector library for OptiCo v0.3
+
+struct Vector {
+    int size;
+    int capacity;
+    pointer<int, Heap> data;
+}
+
+void vector_push(Vector v, int val) {
+    {
+        // intrinsic or manual management
+        v.size := v.size + 1;
+    }
+}
+
+int vector_get(Vector v, int index) {
+    // pointer access placeholder
+    0
+}

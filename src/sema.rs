@@ -14,6 +14,9 @@ pub struct Sema {
 
 impl Sema {
     pub fn new() -> Self {
+        let mut globals = HashMap::new();
+        globals.insert("+".to_string(), Type::Int); // Built-in addition
+
         let mut terminal_states = HashSet::new();
         terminal_states.insert("Closed".to_string());
         terminal_states.insert("Consumed".to_string());
@@ -22,7 +25,7 @@ impl Sema {
         transitions.insert(("Open".to_string(), "put".to_string()), "Closed".to_string());
 
         Self {
-            globals: HashMap::new(),
+            globals,
             structs: HashMap::new(),
             resources: HashSet::new(),
             resource_states: HashMap::new(),
@@ -223,7 +226,10 @@ impl Sema {
                 Type::Void
             }
             Expr::Access(e, field) => {
-                let ty = self.check_expr(e, env, res_consumed, local_resources);
+                let mut ty = self.check_expr(e, env, res_consumed, local_resources);
+                while let Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner) = ty {
+                    ty = *inner;
+                }
                 match ty {
                     Type::Named(name) => {
                         let fields = self.structs.get(&name).expect(&format!("Undefined struct {}", name));
@@ -367,6 +373,17 @@ mod tests {
         };
 
         sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string())));
+        sema.check_program(&prog);
+    }
+
+    #[test]
+    fn test_pointer_context() {
+        let mut sema = Sema::new();
+        let prog = Program {
+            decls: vec![
+                Decl::Global("p".to_string(), Type::Pointer(Box::new(Type::Int), "Heap".to_string()), None),
+            ],
+        };
         sema.check_program(&prog);
     }
 

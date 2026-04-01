@@ -4,3 +4,4 @@ pub mod parser;
 pub mod sema;
 pub mod cir;
 pub mod codegen;
+pub mod std_tests;

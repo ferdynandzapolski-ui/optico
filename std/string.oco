@@ -1,0 +1,17 @@
+// std/string.oco - String library for OptiCo v0.3
+
+struct String {
+    int len;
+    pointer<char, Heap> data;
+}
+
+int string_len(String s) {
+    s.len
+}
+
+char string_at(String s, int index) {
+    // In a real implementation, this would involve pointer arithmetic
+    // and dereferencing, which v0.3 might handle via intrinsics
+    // or direct access if supported.
+    ' ' // placeholder
+}

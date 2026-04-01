@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
             self.advance();
             let name = match &self.current_token {
                 Token::Ident(n) => n.clone(),
-                _ => panic!("Expected struct name"),
+                _ => panic!("Expected struct name, found {:?}", self.current_token),
             };
             self.advance();
             self.expect(Token::LBrace);
@@ -50,7 +50,8 @@ impl<'a> Parser<'a> {
                 let f_ty = self.parse_type();
                 let f_name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
-                    _ => panic!("Expected field name"),
+                    Token::Next => "next".to_string(), // Allow 'next' as field name
+                    _ => panic!("Expected field name, found {:?}", self.current_token),
                 };
                 self.advance();
                 self.expect(Token::Semi);
@@ -225,11 +226,12 @@ impl<'a> Parser<'a> {
         let mut e = self.parse_primary_expr();
         loop {
             match &self.current_token {
-                Token::Arrow => {
+                Token::Arrow | Token::Dot => {
                     self.advance();
                     let field = match &self.current_token {
                         Token::Ident(n) => n.clone(),
-                        _ => panic!("Expected field name after ->, found {:?}", self.current_token),
+                        Token::Next => "next".to_string(), // Allow 'next' as field name
+                        _ => panic!("Expected field name after postfix operator, found {:?}", self.current_token),
                     };
                     self.advance();
                     e = Expr::Access(Box::new(e), field);
@@ -310,7 +312,12 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Expr::ConstInt(val)
             }
-            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Rec | Token::Atomic => {
+            Token::CharLit(c) => {
+                let val = *c;
+                self.advance();
+                Expr::ConstChar(val)
+            }
+            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Rec | Token::Atomic | Token::Struct => {
                 let ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),

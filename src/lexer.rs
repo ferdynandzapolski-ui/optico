@@ -82,6 +82,7 @@ impl<'a> Lexer<'a> {
             '=' => Token::Assign,
             '|' => Token::Pipe,
             '!' => Token::Bang,
+            '+' => Token::Ident("+".to_string()),
             '-' if self.peek() == Some('>') => {
                 self.advance();
                 Token::Arrow
