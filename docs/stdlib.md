@@ -43,7 +43,7 @@ To support the graph-based IR model, the library provides standard structures an
 Supports legacy C integration through Pointer Lifting and `C_context`.
 
 ### Named Contexts
-- `C_context`: A special comonadic context for standard `malloc`/`free` operations.
+- `C_context`: A special comonadic context for standard `malloc`/`free` operations. This context includes an `active` flag used for runtime safety instrumentation to detect and trap use-after-free errors.
 
 ### Lifting Annotations
 - `traversal`: Used to annotate C pointers intended for array-style access.

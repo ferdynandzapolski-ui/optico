@@ -59,14 +59,23 @@ To prevent infinite loops during data retrieval, recursive optics must be produc
 ### 3.2. Concurrency via Atomic Optics
 When a context is shared across threads via `spawn`, the compiler requires views into it to be `atomic optic` types. The compiler wraps the `put` operation in hardware-assisted synchronization (CAS or mutexes). The SMT backend proves that these concurrent updates still obey the Put-Put and Get-Put laws under interleaving.
 
+**Atomic Promotion**: In multi-threaded `spawn {}` blocks, if the compiler cannot prove that two optics are disjoint across threads, it automatically promotes the views to `atomic optic` types. This wraps the `put` operation in hardware-assisted synchronization (such as a Compare-And-Swap loop or a mutex) to ensure the lens laws are preserved under concurrent access.
+
 ### 3.3. Linear Resources and SSFG Analysis
 Resources (files, locks) are strictly linear; they must be consumed exactly once. v0.3 uses Source-Sink Flow Graphs (SSFG) to build a reachability map from resource allocation (Source) to consuming optic (Sink). SSFG reduction allows the compiler to verify linearity in linear time. The **SSFG Checkpointing** mechanism persists the flow graph state to disk, allowing for cross-restart linearity verification.
+
+**Reachability Heuristic**: The compiler uses a reachability heuristic on the SSFG to prove the "must-consume" invariant in linear time. By defining allocation as a "Source" and terminal operations (like `close` or a consuming `put`) as a "Sink," the compiler ensures every resource reaches a terminal state before scope exit.
 
 ### 3.4. Incremental Computation: Zero-Copy CAS + LMDB
 The compiler uses a **Content-Addressable Storage (CAS)** system for IR persistence, backed by the **LMDB** memory-mapped database. This provides:
 - **Zero-Copy Reads**: Page-cache mapped IR nodes accessed directly via memory mapping.
 - **Red-Green Early Cutoff**: 128-bit **Fingerprinting** of query results halts propagation if re-computed hashes match cached values.
 - **Tiered Durability**: `Durable` nodes (StdLib) stay paged, `Normal` nodes follow an **LRU eviction policy**, and `Volatile` nodes reside in hot memory.
+
+### 3.5. Automation of Runtime Checks
+The compiler automatically injects runtime checks in cases where the SMT solver returns a result of "unprovable" or "unknown" for a safety constraint.
+- **Checked Optic Fallback**: For failure modes such as Traversal Overlap (e.g., dynamic indices `arr[i]` vs `arr[j]`), the compiler attempts to prove $i \neq j$ statically. If the proof fails due to complex runtime logic, the compiler transforms the access into a `checked optic`, which inserts a deterministic $O(1)$ runtime check to ensure disjointness.
+- **Context Invalidation**: All comonadic contexts include an `active` flag. The compiler instruments every `get` and `put` with a check for this flag, automatically trapping use-after-free errors at runtime if the context's `counit` has already executed.
 
 ## 4. The Verification Pipeline
 
@@ -167,16 +176,16 @@ extern C {
 }
 ```
 
-### 9.2. Neuro-Symbolic Intent Inference
-The compiler utilizes neuro-symbolic techniques to automatically lift raw C pointers into safe OptiCo views:
-- **Optic Lifting**: Pointers intended for single-object access are promoted to `optic T*`.
-- **Traversal Lifting**: Pointers used as arrays (e.g., matching naming patterns like `arr`) are promoted to `traversal T*`.
+### 9.2. Formal Intent Inference (Non-LLM)
+To infer the "intent" of code (such as memory ownership or resource protocols) without relying on probabilistic models like LLMs, OptiCo utilizes deductive symbolic reasoning and structural heuristics.
+- **Bi-abduction**: This technique automates the discovery of specifications from bare code by symbolically executing a function to identify **Antiframes** (missing state required for safety) and **Frames** (state that remains unchanged).
+- **Combinatorial Invariant Generation**: For loop-heavy code, the compiler employs combinatorial techniques such as recurrence solving and variable elimination to deduce loop invariants without human intervention.
 
 ### 9.3. C Heap Context (`C_context`)
 Legacy heap management is modeled using the `C_context` comonadic context. The compiler uses SSFG analysis to ensure that every `malloc` is balanced by a `free`, preventing leaks and double-frees in imported C code.
 
 ### 9.4. Phantom Lifetime Stabilization
-OptiCo prevents stack pointers from escaping their function's activation record. Any attempt to return a pointer to a local variable or store it in a longer-lived context results in a **Phantom Lifetime Violation**.
+OptiCo prevents stack pointers from escaping their function's activation record. The compiler uses static "points-to" analysis to bind raw pointers to specific `ContextID` tokens. Any attempt to return a pointer to a local variable or store it in a longer-lived context results in a **Phantom Lifetime Violation**.
 
 ## 10. Conclusion
 
