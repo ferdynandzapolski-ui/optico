@@ -62,6 +62,18 @@ impl CodeGenerator {
             CIROp::ResourceDecl(name, ty, val) => {
                 format!("{}resource {:?} {} = (\n{}{})", pad, ty, name, Self::gen_op(val, indent + 1), pad)
             }
+            CIROp::ProtocolDecl(name, states) => {
+                let mut s = format!("{}protocol {} {{\n", pad, name);
+                for state in states {
+                    s.push_str(&format!("{}  state {} {{\n", pad, state.name));
+                    for (o_name, o_ty) in &state.optics {
+                        s.push_str(&format!("{}    {:?} {};\n", pad, o_ty, o_name));
+                    }
+                    s.push_str(&format!("{}  }}\n", pad));
+                }
+                s.push_str(&format!("{}}}", pad));
+                s
+            }
         }
     }
 }

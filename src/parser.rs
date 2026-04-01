@@ -74,6 +74,10 @@ impl<'a> Parser<'a> {
             return Decl::Resource { name, ty, val };
         }
 
+        if self.current_token == Token::Protocol {
+            return self.parse_protocol_decl();
+        }
+
         let ty = self.parse_type();
         let name = match &self.current_token {
             Token::Ident(n) => n.clone(),
@@ -110,6 +114,41 @@ impl<'a> Parser<'a> {
             };
             Decl::Global(name, ty, val)
         }
+    }
+
+    fn parse_protocol_decl(&mut self) -> Decl {
+        self.expect(Token::Protocol);
+        let name = match &self.current_token {
+            Token::Ident(n) => n.clone(),
+            _ => panic!("Expected protocol name"),
+        };
+        self.advance();
+        self.expect(Token::LBrace);
+        let mut states = Vec::new();
+        while self.current_token == Token::State {
+            self.advance();
+            let s_name = match &self.current_token {
+                Token::Ident(n) => n.clone(),
+                _ => panic!("Expected state name"),
+            };
+            self.advance();
+            self.expect(Token::LBrace);
+            let mut optics = Vec::new();
+            while self.current_token != Token::RBrace {
+                let o_ty = self.parse_type();
+                let o_name = match &self.current_token {
+                    Token::Ident(n) => n.clone(),
+                    _ => panic!("Expected optic name in state"),
+                };
+                self.advance();
+                self.expect(Token::Semi);
+                optics.push((o_name, o_ty));
+            }
+            self.expect(Token::RBrace);
+            states.push(ProtocolState { name: s_name, optics });
+        }
+        self.expect(Token::RBrace);
+        Decl::Protocol { name, states }
     }
 
     fn parse_type(&mut self) -> Type {
@@ -188,7 +227,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     self.expect(Token::RBracket);
-                    Type::Resource(vec![], Some(state)) // In v0.3 Type::Resource uses fields, but often referred by Name[State]
+                    Type::Resource(vec![], Some(state), Some(name))
                 } else {
                     Type::Named(name)
                 }
@@ -397,7 +436,7 @@ mod tests {
         match &prog.decls[0] {
             Decl::Resource { name, ty, .. } => {
                 assert_eq!(name, "console");
-                assert_eq!(*ty, Type::Resource(vec![], Some("Open".to_string())));
+                assert_eq!(*ty, Type::Resource(vec![], Some("Open".to_string()), Some("Console".to_string())));
             }
             _ => panic!("Expected Resource declaration"),
         }

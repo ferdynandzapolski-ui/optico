@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 pub struct Sema {
     pub globals: HashMap<String, Type>,
     pub structs: HashMap<String, Vec<(String, Type)>>, // RFC 001: Struct definitions
+    pub protocols: HashMap<String, Vec<ProtocolState>>,
     pub resources: HashSet<String>,
     pub resource_states: HashMap<String, String>, // resource name -> current state
     pub terminal_states: HashSet<String>,
@@ -27,6 +28,7 @@ impl Sema {
         Self {
             globals,
             structs: HashMap::new(),
+            protocols: HashMap::new(),
             resources: HashSet::new(),
             resource_states: HashMap::new(),
             terminal_states,
@@ -48,10 +50,13 @@ impl Sema {
                 Decl::Struct { name, fields } => {
                     self.structs.insert(name.clone(), fields.clone());
                 }
+                Decl::Protocol { name, states } => {
+                    self.protocols.insert(name.clone(), states.clone());
+                }
                 Decl::Resource { name, ty, .. } => {
                     self.globals.insert(name.clone(), ty.clone());
                     self.resources.insert(name.clone());
-                    if let Type::Resource(_, state) = ty {
+                    if let Type::Resource(_, state, _) = ty {
                         let initial_state = state.clone().unwrap_or_else(|| "Open".to_string());
                         self.resource_states.insert(name.clone(), initial_state);
                     }
@@ -95,7 +100,7 @@ impl Sema {
                 if local_resources.contains(n) || self.resources.contains(n) {
                     // Check if it is a resource that can be consumed or is state-tracked
                     if let Some(ty) = env.get(n) {
-                        if let Type::Resource(_, _) = ty {
+                        if let Type::Resource(..) = ty {
                             if res_consumed.contains(n) {
                                 panic!("Linearity violation: resource {} used after consume", n);
                             }
@@ -203,7 +208,7 @@ impl Sema {
             }
             Expr::ResourceDecl(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-                if let Type::Resource(_, state) = &ty {
+                if let Type::Resource(_, state, _) = &ty {
                     let initial_state = state.clone().unwrap_or_else(|| "Open".to_string());
                     self.resource_states.insert(n.clone(), initial_state);
                 }
@@ -226,6 +231,18 @@ impl Sema {
                 Type::Void
             }
             Expr::Access(e, field) => {
+                // If the receiver is a protocol name
+                if let Expr::Var(n) = &**e {
+                    if let Some(states) = self.protocols.get(n) {
+                        for state in states {
+                            if let Some((_, ty)) = state.optics.iter().find(|(f, _)| f == field) {
+                                return Type::ProtocolOptic(n.clone(), state.name.clone(), Box::new(ty.clone()));
+                            }
+                        }
+                        panic!("Field {} not found in protocol {}", field, n);
+                    }
+                }
+
                 let mut ty = self.check_expr(e, env, res_consumed, local_resources);
                 while let Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner) = ty {
                     ty = *inner;
@@ -242,8 +259,60 @@ impl Sema {
                 }
             }
             Expr::Compose(e1, e2) => {
-                self.check_expr(e1, env, res_consumed, local_resources);
-                self.check_expr(e2, env, res_consumed, local_resources);
+                let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
+                let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
+
+                if let Type::ProtocolOptic(p_name, s_name, inner) = ty2 {
+                    // Check if ty1 is a resource associated with this protocol
+                    if let Type::Resource(_, current_state, Some(res_protocol)) = &ty1 {
+                        if &p_name == res_protocol {
+                            if Some(&s_name) != current_state.as_ref() {
+                                panic!("Protocol violation: expected state {}, found {:?}", s_name, current_state);
+                            }
+
+                            // Perform state transition
+                            // For simplicity in this v0.3 model, we assume linear progression or look for the next state in the protocol
+                            if let Some(states) = self.protocols.get(&p_name) {
+                                let current_idx = states.iter().position(|s| s.name == s_name).expect("State not found in protocol");
+                                if current_idx + 1 < states.len() {
+                                    let next_state = states[current_idx + 1].name.clone();
+                                    // We need the resource name to update its state.
+                                    // Compose usually works on the resource itself if it's the first element.
+                                    if let Expr::Var(n) = &**e1 {
+                                        self.resource_states.insert(n.clone(), next_state);
+                                    }
+                                }
+                            }
+                            return *inner;
+                        }
+                    }
+                    // If e1 is an optic associated with a resource
+                    let res_assoc = match ty1 {
+                        Type::Optic(_, res) | Type::RecOptic(_, res) | Type::AtomicOptic(_, res) => res,
+                        _ => None,
+                    };
+
+                    if let Some(res_name) = res_assoc {
+                        let res_ty = env.get(&res_name).expect("Associated resource not found");
+                        if let Type::Resource(_, current_state, Some(res_protocol)) = res_ty {
+                            if &p_name == res_protocol {
+                                if Some(&s_name) != current_state.as_ref() {
+                                    panic!("Protocol violation: expected state {}, found {:?}", s_name, current_state);
+                                }
+                                // Transition
+                                if let Some(states) = self.protocols.get(&p_name) {
+                                    let current_idx = states.iter().position(|s| s.name == s_name).expect("State not found in protocol");
+                                    if current_idx + 1 < states.len() {
+                                        let next_state = states[current_idx + 1].name.clone();
+                                        self.resource_states.insert(res_name.clone(), next_state);
+                                    }
+                                }
+                                return *inner;
+                            }
+                        }
+                    }
+                }
+
                 Type::Int // simplified focus
             }
             Expr::Unsafe(e) => self.check_expr(e, env, res_consumed, local_resources),
@@ -261,7 +330,7 @@ mod tests {
     fn test_linearity() {
         let mut sema = Sema::new();
         let mut env = HashMap::new();
-        env.insert("f".to_string(), Type::Resource(vec![], Some("Consumed".to_string())));
+        env.insert("f".to_string(), Type::Resource(vec![], Some("Consumed".to_string()), None));
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
         locals.insert("f".to_string());
@@ -347,7 +416,7 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string())));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
         sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string())));
 
         sema.check_program(&prog);
@@ -372,7 +441,7 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string())));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
         sema.check_program(&prog);
     }
 
@@ -413,9 +482,48 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string())));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
         sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string())));
 
         sema.check_program(&prog);
+    }
+
+    #[test]
+    fn test_compiler_phase_query() {
+        let input = "
+            protocol NodeSession {
+                state Parsed { optic Symbol* resolve; }
+                state Resolved { optic Type* typecheck; }
+                state Typed { optic IR* lower; }
+            }
+
+            struct Symbol { int id; }
+            struct Type { int id; }
+            struct IR { int id; }
+
+            resource NodeSession[Parsed] graph = alloc<NodeSession>(1);
+
+            void main() {
+                // Testing protocol-gated access
+                optic Symbol* r = NodeSession.resolve;
+
+                // Testing composition and transition
+                optic Symbol* sym = graph | r;
+                // graph should now be in Resolved state
+            }
+        ";
+
+        let mut parser = crate::parser::Parser::new(input);
+        let prog = parser.parse_program();
+
+        let mut sema = Sema::new();
+        // Manually adding some required globals for the test to pass
+        sema.globals.insert("Symbol".to_string(), Type::Struct(vec![]));
+        sema.globals.insert("Type".to_string(), Type::Struct(vec![]));
+        sema.globals.insert("IR".to_string(), Type::Struct(vec![]));
+
+        sema.check_program(&prog);
+
+        assert_eq!(sema.resource_states.get("graph").unwrap(), "Resolved");
     }
 }
