@@ -26,6 +26,19 @@ The I/O module handles interaction with the system.
 - `void print_int(int val)`: Outputs an integer to the console.
 - `void print_char(char val)`: Outputs a character to the console.
 
+## Compiler IR Components (`std/ir/`)
+To support the graph-based IR model, the library provides standard structures and protocols for compiler phases.
+
+### Protocols
+- `protocol NodeSession`: Defines the sequence `Parsed -> Resolved -> Typed -> Lowered` for IR nodes.
+- `state Parsed { optic Symbol* resolve; }`: Focuses on the resolver to reach the `Resolved` state.
+- `state Resolved { optic Type* typecheck; }`: Focuses on type analysis to reach the `Typed` state.
+
+### Structs
+- `struct Node { int id; SourceLoc loc; }`: The base carrier for AST information.
+- `struct Symbol { string name; int scope_id; }`: Represents a resolved symbol.
+- `struct Type { string kind; int size; }`: Represents a verified type.
+
 ## Usage
 Include the standard library files at the beginning of your project or as needed.
 
