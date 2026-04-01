@@ -16,6 +16,7 @@ pub enum CIROp {
     Block(Vec<CIROp>),
     StructDecl(String, Vec<(String, Type)>), // RFC 001
     ResourceDecl(String, Type, Box<CIROp>),  // RFC 002
+    ProtocolDecl(String, Vec<ProtocolState>),
 }
 
 pub struct CIRLowerer;
@@ -30,6 +31,9 @@ impl CIRLowerer {
                 }
                 Decl::Struct { name, fields } => {
                     ops.push(CIROp::StructDecl(name.clone(), fields.clone()));
+                }
+                Decl::Protocol { name, states } => {
+                    ops.push(CIROp::ProtocolDecl(name.clone(), states.clone()));
                 }
                 Decl::Resource { name, ty, val } => {
                     ops.push(CIROp::ResourceDecl(name.clone(), ty.clone(), Box::new(Self::lower_expr(val))));

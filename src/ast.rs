@@ -7,7 +7,8 @@ pub enum Type {
     Void,
     Struct(Vec<(String, Type)>),
     Named(String),             // RFC 001: Reference to a named struct
-    Resource(Vec<(String, Type)>, Option<String>),
+    Resource(Vec<(String, Type)>, Option<String>, Option<String>), // fields, state, protocol
+    ProtocolOptic(String, String, Box<Type>), // protocol, state, inner
     Co(Box<Type>),             // co τ
     Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
     Later(Box<Type>),          // I τ
@@ -41,6 +42,12 @@ pub enum Expr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ProtocolState {
+    pub name: String,
+    pub optics: Vec<(String, Type)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Decl {
     Func {
         name: String,
@@ -56,6 +63,10 @@ pub enum Decl {
         name: String,
         ty: Type,
         val: Expr,
+    },
+    Protocol {
+        name: String,
+        states: Vec<ProtocolState>,
     },
     Global(String, Type, Option<Expr>),
 }
