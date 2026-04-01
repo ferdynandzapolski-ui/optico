@@ -158,7 +158,19 @@ impl<'a> Parser<'a> {
             Token::BoolType => { self.advance(); Type::Bool }
             Token::CharType => { self.advance(); Type::Char }
             Token::VoidType => { self.advance(); Type::Void }
-            Token::Co => { self.advance(); Type::Co(Box::new(self.parse_type())) }
+            Token::Co => {
+                self.advance();
+                let mut dur = None;
+                if let Token::Ident(n) = &self.current_token {
+                    match n.as_str() {
+                        "Volatile" => { dur = Some(crate::persistence::Durability::Volatile); self.advance(); }
+                        "Normal" => { dur = Some(crate::persistence::Durability::Normal); self.advance(); }
+                        "Durable" => { dur = Some(crate::persistence::Durability::Durable); self.advance(); }
+                        _ => {}
+                    }
+                }
+                Type::Co(Box::new(self.parse_type()), dur)
+            }
             Token::Optic => {
                 self.advance();
                 let inner = self.parse_type();
@@ -217,7 +229,37 @@ impl<'a> Parser<'a> {
                 Type::Pointer(Box::new(inner), ctx)
             }
             Token::Ident(n) => {
-                let name = n.clone();
+                let mut dur = None;
+                let mut name = n.clone();
+                match name.as_str() {
+                    "Volatile" | "Normal" | "Durable" => {
+                        let potential_dur = match name.as_str() {
+                            "Volatile" => crate::persistence::Durability::Volatile,
+                            "Normal" => crate::persistence::Durability::Normal,
+                            "Durable" => crate::persistence::Durability::Durable,
+                            _ => unreachable!(),
+                        };
+
+                        // We need to look ahead to see if it's a prefix or a type name
+                        // Lexer doesn't have lookahead beyond 1 char, but Parser has current_token.
+                        // If we advance, we must be sure it's a prefix.
+                        // A durability prefix is always followed by another Ident (the type name)
+                        // OR a Protocol name which is also an Ident.
+
+                        let mut lex_copy = self.lexer.clone();
+                        let next_token = lex_copy.next_token();
+                        if let Token::Ident(_) = next_token {
+                             dur = Some(potential_dur);
+                             self.advance();
+                             name = match &self.current_token {
+                                 Token::Ident(n) => n.clone(),
+                                 _ => unreachable!(),
+                             };
+                        }
+                    }
+                    _ => {}
+                }
+
                 self.advance();
                 if self.current_token == Token::LBracket {
                     self.advance();
@@ -227,8 +269,11 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     self.expect(Token::RBracket);
-                    Type::Resource(vec![], Some(state), Some(name))
+                    Type::Resource(vec![], Some(state), Some(name), dur)
                 } else {
+                    if dur.is_some() {
+                        panic!("Durability only allowed for co types and resources");
+                    }
                     Type::Named(name)
                 }
             }
@@ -307,6 +352,22 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.expect(Token::LAngle);
                 let _ty = self.parse_type();
+                let mut dur = None;
+                if self.current_token == Token::Comma {
+                    self.advance();
+                    match &self.current_token {
+                        Token::Ident(n) => {
+                            match n.as_str() {
+                                "Volatile" => dur = Some(crate::persistence::Durability::Volatile),
+                                "Normal" => dur = Some(crate::persistence::Durability::Normal),
+                                "Durable" => dur = Some(crate::persistence::Durability::Durable),
+                                _ => panic!("Unknown durability level: {}", n),
+                            }
+                        }
+                        _ => panic!("Expected durability level after comma in alloc"),
+                    }
+                    self.advance();
+                }
                 self.expect(Token::RAngle);
                 self.expect(Token::LParen);
                 let mut args = Vec::new();
@@ -317,7 +378,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.expect(Token::RParen);
-                Expr::Alloc(_ty, args)
+                Expr::Alloc(_ty, args, dur)
             }
             Token::Free => {
                 self.advance();
@@ -436,7 +497,7 @@ mod tests {
         match &prog.decls[0] {
             Decl::Resource { name, ty, .. } => {
                 assert_eq!(name, "console");
-                assert_eq!(*ty, Type::Resource(vec![], Some("Open".to_string()), Some("Console".to_string())));
+                assert_eq!(*ty, Type::Resource(vec![], Some("Open".to_string()), Some("Console".to_string()), None));
             }
             _ => panic!("Expected Resource declaration"),
         }

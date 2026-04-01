@@ -15,6 +15,7 @@ pub enum Token {
     EOF,
 }
 
+#[derive(Clone)]
 pub struct Lexer<'a> {
     input: &'a str,
     pos: usize,
