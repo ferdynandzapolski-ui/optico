@@ -39,6 +39,15 @@ To support the graph-based IR model, the library provides standard structures an
 - `struct Symbol { string name; int scope_id; }`: Represents a resolved symbol.
 - `struct Type { string kind; int size; }`: Represents a verified type.
 
+## Interoperability Support (`std/interop.oco`)
+Supports legacy C integration through Pointer Lifting and `C_context`.
+
+### Named Contexts
+- `C_context`: A special comonadic context for standard `malloc`/`free` operations.
+
+### Lifting Annotations
+- `traversal`: Used to annotate C pointers intended for array-style access.
+
 ## Usage
 Include the standard library files at the beginning of your project or as needed.
 

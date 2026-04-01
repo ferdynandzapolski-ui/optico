@@ -9,8 +9,9 @@ pub enum Type {
     Named(String),             // RFC 001: Reference to a named struct
     Resource(Vec<(String, Type)>, Option<String>, Option<String>, Option<crate::persistence::Durability>), // fields, state, protocol, durability
     ProtocolOptic(String, String, Box<Type>), // protocol, state, inner
-    Co(Box<Type>, Option<crate::persistence::Durability>),             // co τ
+    Co(Box<Type>, Option<crate::persistence::Durability>, Option<String>), // co Δ τ (with optional ContextID)
     Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
+    Traversal(Box<Type>, Option<String>),      // traversal τ*
     Later(Box<Type>),          // I τ
     RecOptic(Box<Type>, Option<String>),       // rec optic τ* (with optional resource association)
     AtomicOptic(Box<Type>, Option<String>),    // atomic optic τ* (with optional resource association)
@@ -48,6 +49,7 @@ pub enum Expr {
     Spawn(Box<Expr>),          // spawn { e }
     Block(Vec<Expr>),          // { e1; e2; ... }
     Assign(String, Box<Expr>), // x = e
+    Return(Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,6 +80,7 @@ pub enum Decl {
         states: Vec<ProtocolState>,
     },
     Global(String, Type, Option<Expr>),
+    ExternC(Vec<Decl>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

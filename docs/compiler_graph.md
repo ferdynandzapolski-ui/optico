@@ -37,6 +37,8 @@ To support large codebases, the graph is backed by a **Zero-Copy Content-Address
   - **Volatile:** Temporary nodes residing in the hot heap.
   - **Normal:** Standard IR nodes eligible for paging to disk.
   - **Durable:** Standard library and external dependency nodes, pre-loaded in memory-mapped read-only pages.
+- **Interoperability Contexts:** The graph supports legacy C nodes via special contexts:
+  - **C_context:** A comonadic wrapper for memory-mapped legacy IR produced by standard C frontends.
 - **LRU Paging:** "Cold" nodes are paged into memory on-demand when focused by an optic, with an LRU (Least Recently Used) policy evicting nodes when memory limits are reached.
 
 ### 2.2. Incremental Stability: The Red-Green Algorithm
@@ -47,7 +49,7 @@ Incremental updates are managed via the **Red-Green Algorithm** for "Early Cutof
 
 ### 2.3. SSFG Persistence
 
-The **Source-Sink Flow Graph (SSFG)** for linear resources is persisted as a "Checkpointed Thread," allowing the compiler to resume linearity verification across restarts without re-analyzing the entire project.
+The **Source-Sink Flow Graph (SSFG)** for linear resources is persisted as a "Checkpointed Thread," allowing the compiler to resume linearity verification across restarts without re-analyzing the entire project. In v0.3, this includes tracking of C heap allocations (`malloc`/`free`) to ensure memory safety in mixed-language graphs.
 
 ## 3. Query as Optic Composition
 

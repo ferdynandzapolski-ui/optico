@@ -130,7 +130,7 @@ mod tests {
         } else { panic!("Expected Resource declaration"); }
 
         if let Decl::Global(_, ty, _) = &prog.decls[1] {
-            if let Type::Co(_, dur) = ty {
+            if let Type::Co(_, dur, _) = ty {
                 assert_eq!(dur, &Some(Durability::Normal));
             } else { panic!("Expected Co type"); }
         } else { panic!("Expected Global declaration"); }
