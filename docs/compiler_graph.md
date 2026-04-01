@@ -51,6 +51,12 @@ Incremental updates are managed via the **Red-Green Algorithm** for "Early Cutof
 
 The **Source-Sink Flow Graph (SSFG)** for linear resources is persisted as a "Checkpointed Thread," allowing the compiler to resume linearity verification across restarts without re-analyzing the entire project. In v0.3, this includes tracking of C heap allocations (`malloc`/`free`) to ensure memory safety in mixed-language graphs.
 
+### 2.4. Formal Intent Inference in the Graph
+
+The compiler leverages the graph-based IR to perform formal intent inference without probabilistic models.
+- **Bi-abduction on Nodes**: The compiler symbolically executes functions by traversing the IR graph. This allows it to discover specifications for nodes, identifying **Antiframes** (the state required for a function node to be safely executed) and **Frames** (the part of the graph that remains invariant).
+- **SSFG Reachability**: Resource linearity is verified by performing a reachability analysis on the SSFG embedded within the IR. The compiler proves the "must-consume" invariant by ensuring that every "Source" node in the graph reaches a terminal "Sink" node along all execution paths.
+
 ## 3. Query as Optic Composition
 
 Queries are implemented as compositions of first-class optics. This removes the need for a separate query language.
