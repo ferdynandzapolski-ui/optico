@@ -1,0 +1,11 @@
+// std/ir/type.oco - Type system representation
+
+struct Type {
+    String kind;
+    int size;
+}
+
+struct IR {
+    int opcode;
+    int value;
+}

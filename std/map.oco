@@ -16,16 +16,33 @@ struct Map {
 
 // Recursive map lookup
 int map_get(optic MapNode* node, int key) {
-    {
-        // TODO: Base case for key comparison
-        node->entry.value | next map_get(node->next, key)
+    if (0) {
+        0
+    } else {
+        {
+            int found = 0;
+            if (node->entry.key == key) {
+                found = node->entry.value;
+            } else {
+                found = map_get(node->next, key);
+            }
+            found
+        }
     }
 }
 
 // Recursive map insertion demonstrating productive recursion
 rec optic MapNode* map_insert(optic MapNode* node, int key, int value) {
-    {
-        // TODO: Actual insertion logic and key check
-        node->next | next map_insert(node->next, key, value)
+    if (is_null(node)) {
+        node
+    } else {
+        if (node->entry.key == key) {
+            {
+                node->entry.value := value;
+                node
+            }
+        } else {
+            node->next | next map_insert(node->next, key, value)
+        }
     }
 }

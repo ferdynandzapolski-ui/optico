@@ -4,6 +4,7 @@ pub enum Token {
     Struct, Resource, Co, Optic, Rec, Atomic, Pointer,
     Next, Prev, Alloc, Free, Unsafe, Checked, Spawn,
     ResourceKw, Protocol, State,
+    If, Else,
     Ident(String),
     IntLit(i64),
     FloatLit(f64),
@@ -11,7 +12,8 @@ pub enum Token {
     CharLit(char),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket, LAngle, RAngle,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
-    Bang,
+    Bang, Plus, Minus, Slash,
+    Eq, Ne, Lt, Gt, Le, Ge,
     EOF,
 }
 
@@ -66,8 +68,6 @@ impl<'a> Lexer<'a> {
             ')' => Token::RParen,
             '[' => Token::LBracket,
             ']' => Token::RBracket,
-            '<' => Token::LAngle,
-            '>' => Token::RAngle,
             '.' => Token::Dot,
             ',' => Token::Comma,
             ';' => Token::Semi,
@@ -80,13 +80,48 @@ impl<'a> Lexer<'a> {
                 }
             }
             '*' => Token::Star,
-            '=' => Token::Assign,
+            '/' => Token::Slash,
+            '=' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::Eq
+                } else {
+                    Token::Assign
+                }
+            }
             '|' => Token::Pipe,
-            '!' => Token::Bang,
-            '+' => Token::Ident("+".to_string()),
-            '-' if self.peek() == Some('>') => {
-                self.advance();
-                Token::Arrow
+            '!' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::Ne
+                } else {
+                    Token::Bang
+                }
+            }
+            '+' => Token::Plus,
+            '-' => {
+                if self.peek() == Some('>') {
+                    self.advance();
+                    Token::Arrow
+                } else {
+                    Token::Minus
+                }
+            }
+            '<' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::Le
+                } else {
+                    Token::LAngle
+                }
+            }
+            '>' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::Ge
+                } else {
+                    Token::RAngle
+                }
             }
             '\'' => {
                 let val = self.advance().unwrap();
@@ -139,6 +174,8 @@ impl<'a> Lexer<'a> {
                     "unsafe" => Token::Unsafe,
                     "checked" => Token::Checked,
                     "spawn" => Token::Spawn,
+                    "if" => Token::If,
+                    "else" => Token::Else,
                     "true" => Token::BoolLit(true),
                     "false" => Token::BoolLit(false),
                     _ => Token::Ident(s),

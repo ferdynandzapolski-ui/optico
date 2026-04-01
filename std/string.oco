@@ -1,22 +1,33 @@
 // std/string.oco - String library for OptiCo v0.3
 
-// String struct moved to prelude for broad availability
-
 int string_len(String s) {
     s.len
 }
 
 char string_at(String s, int index) {
-    // TODO: Implement pointer arithmetic for raw access
-    ' ' // placeholder
+    s.data[index]
 }
 
-int string_equal(String s1, String s2) {
-    // TODO: Implement character-by-character comparison
-    0 // placeholder (false)
+bool string_equal(String s1, String s2) {
+    if (s1.len != s2.len) {
+        false
+    } else {
+        if (s1.len == 0) {
+            true
+        } else {
+            string_equal_rec(s1.data, s2.data, s1.len, 0)
+        }
+    }
 }
 
-char string_char_at(String s, int i) {
-    // TODO: Implement pointer dereference
-    ' '
+bool string_equal_rec(pointer<char, Heap> d1, pointer<char, Heap> d2, int len, int i) {
+    if (i == len) {
+        true
+    } else {
+        if (d1[i] == d2[i]) {
+            string_equal_rec(d1, d2, len, i + 1)
+        } else {
+            false
+        }
+    }
 }

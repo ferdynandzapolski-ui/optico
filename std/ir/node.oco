@@ -1,0 +1,19 @@
+// std/ir/node.oco - Base AST node structure
+
+struct Node {
+    int id;
+    int kind;
+}
+
+// NodeSession protocol for phase management
+protocol NodeSession {
+    state Parsed {
+        optic Symbol* resolve;   // Transitions Parsed -> Resolved
+    }
+    state Resolved {
+        optic Type* typecheck;   // Transitions Resolved -> Typed
+    }
+    state Typed {
+        optic IR* lower;         // Transitions Typed -> Lowered
+    }
+}

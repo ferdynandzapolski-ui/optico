@@ -11,9 +11,17 @@ struct List {
 
 // Productive recursive list traversal
 rec optic int* list_at(optic ListNode* node, int index) {
-    {
-        // Basic logic using Nakano's later modality (next) to ensure productivity
-        // Note: The logic here is symbolic of how it's handled in OptiCo v0.3
-        node->val | next list_at(node->next, index)
+    if (index == 0) {
+        node->val
+    } else {
+        node->val | next list_at(node->next, index - 1)
+    }
+}
+
+int list_sum(optic ListNode* node) {
+    if (is_null(node)) {
+        0
+    } else {
+        node->val + list_sum(node->next)
     }
 }
