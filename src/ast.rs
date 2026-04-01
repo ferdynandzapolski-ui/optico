@@ -7,9 +7,9 @@ pub enum Type {
     Void,
     Struct(Vec<(String, Type)>),
     Named(String),             // RFC 001: Reference to a named struct
-    Resource(Vec<(String, Type)>, Option<String>, Option<String>), // fields, state, protocol
+    Resource(Vec<(String, Type)>, Option<String>, Option<String>, Option<crate::persistence::Durability>), // fields, state, protocol, durability
     ProtocolOptic(String, String, Box<Type>), // protocol, state, inner
-    Co(Box<Type>),             // co τ
+    Co(Box<Type>, Option<crate::persistence::Durability>),             // co τ
     Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
     Later(Box<Type>),          // I τ
     RecOptic(Box<Type>, Option<String>),       // rec optic τ* (with optional resource association)
@@ -28,7 +28,7 @@ pub enum Expr {
     Call(Box<Expr>, Vec<Expr>), // e1(e2, ...)
     Next(Box<Expr>),           // next e
     Prev(Box<Expr>),           // prev e
-    Alloc(Type, Vec<Expr>),    // alloc<τ>(...)
+    Alloc(Type, Vec<Expr>, Option<crate::persistence::Durability>),    // alloc<τ>(...)
     Free(Box<Expr>),           // free(e)
     Get(Box<Expr>),            // *e
     Put(Box<Expr>, Box<Expr>), // e1 := e2

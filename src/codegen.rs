@@ -20,8 +20,8 @@ impl CodeGenerator {
             CIROp::Get(v) => format!("{}get (\n{}{})", pad, Self::gen_op(v, indent + 1), pad),
             CIROp::Put(e1, e2) => format!("{}put (\n{}{},\n{}{})", pad, Self::gen_op(e1, indent + 1), pad, Self::gen_op(e2, indent + 1), pad),
             CIROp::Compose(e1, e2) => format!("{}compose (\n{}{},\n{}{})", pad, Self::gen_op(e1, indent + 1), pad, Self::gen_op(e2, indent + 1), pad),
-            CIROp::Alloc(ty, args) => {
-                let mut s = format!("{}alloc<{:?}> (\n", pad, ty);
+            CIROp::Alloc(ty, args, dur) => {
+                let mut s = format!("{}alloc<{:?}, {:?}> (\n", pad, ty, dur);
                 for arg in args {
                     s.push_str(&Self::gen_op(arg, indent + 1));
                     s.push_str(",\n");
@@ -30,6 +30,9 @@ impl CodeGenerator {
                 s
             }
             CIROp::Free(e) => format!("{}free (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
+            CIROp::Fetch(fp) => format!("{}fetch {:?}", pad, fp),
+            CIROp::Persist(v, dur) => format!("{}persist (\n{}{},\n{}  {:?})", pad, Self::gen_op(v, indent + 1), pad, pad, dur),
+            CIROp::Checkpoint(n) => format!("{}checkpoint {}", pad, n),
             CIROp::Next(e) => format!("{}next (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
             CIROp::Prev(e) => format!("{}prev (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
             CIROp::Call(n, args) => {

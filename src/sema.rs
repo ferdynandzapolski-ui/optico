@@ -7,10 +7,72 @@ pub struct Sema {
     pub protocols: HashMap<String, Vec<ProtocolState>>,
     pub resources: HashSet<String>,
     pub resource_states: HashMap<String, String>, // resource name -> current state
+    pub resource_durability: HashMap<String, crate::persistence::Durability>,
     pub terminal_states: HashSet<String>,
     pub transitions: HashMap<(String, String), String>, // (current state, action) -> next state
+    pub query_cache: HashMap<String, (Type, crate::persistence::Fingerprint)>, // query description -> (result type, fingerprint)
+    pub storage: crate::persistence::StorageBackend,
     pub in_rec_optic: bool,
     pub guarded: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SSFGCheckpoint {
+    pub resource_states: HashMap<String, String>,
+    pub resource_durability: HashMap<String, crate::persistence::Durability>,
+}
+
+impl SSFGCheckpoint {
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+        // Simple binary serialization: [num_resources] [res_name_len] [res_name] [state_len] [state] [durability]
+        data.extend_from_slice(&(self.resource_states.len() as u32).to_le_bytes());
+        for (name, state) in &self.resource_states {
+            data.extend_from_slice(&(name.len() as u32).to_le_bytes());
+            data.extend_from_slice(name.as_bytes());
+            data.extend_from_slice(&(state.len() as u32).to_le_bytes());
+            data.extend_from_slice(state.as_bytes());
+            let dur = match self.resource_durability.get(name) {
+                Some(crate::persistence::Durability::Volatile) => 0u8,
+                Some(crate::persistence::Durability::Normal) => 1u8,
+                Some(crate::persistence::Durability::Durable) => 2u8,
+                None => 3u8,
+            };
+            data.push(dur);
+        }
+        data
+    }
+
+    pub fn deserialize(data: &[u8]) -> Self {
+        let mut resource_states = HashMap::new();
+        let mut resource_durability = HashMap::new();
+        let mut pos = 0;
+        let num_res = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap());
+        pos += 4;
+        for _ in 0..num_res {
+            let name_len = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap()) as usize;
+            pos += 4;
+            let name = String::from_utf8(data[pos..pos+name_len].to_vec()).unwrap();
+            pos += name_len;
+            let state_len = u32::from_le_bytes(data[pos..pos+4].try_into().unwrap()) as usize;
+            pos += 4;
+            let state = String::from_utf8(data[pos..pos+state_len].to_vec()).unwrap();
+            pos += state_len;
+            let dur_byte = data[pos];
+            pos += 1;
+            let dur = match dur_byte {
+                0 => Some(crate::persistence::Durability::Volatile),
+                1 => Some(crate::persistence::Durability::Normal),
+                2 => Some(crate::persistence::Durability::Durable),
+                _ => None,
+            };
+            resource_states.insert(name.clone(), state);
+            if let Some(d) = dur {
+                resource_durability.insert(name, d);
+            }
+        }
+        SSFGCheckpoint { resource_states, resource_durability }
+    }
 }
 
 impl Sema {
@@ -31,11 +93,26 @@ impl Sema {
             protocols: HashMap::new(),
             resources: HashSet::new(),
             resource_states: HashMap::new(),
+            resource_durability: HashMap::new(),
             terminal_states,
             transitions,
+            query_cache: HashMap::new(),
+            storage: crate::persistence::StorageBackend::new(100),
             in_rec_optic: false,
             guarded: false,
         }
+    }
+
+    pub fn checkpoint_ssfg(&self) -> SSFGCheckpoint {
+        SSFGCheckpoint {
+            resource_states: self.resource_states.clone(),
+            resource_durability: self.resource_durability.clone(),
+        }
+    }
+
+    pub fn restore_ssfg(&mut self, checkpoint: SSFGCheckpoint) {
+        self.resource_states = checkpoint.resource_states;
+        self.resource_durability = checkpoint.resource_durability;
     }
 
     pub fn check_program(&mut self, prog: &Program) {
@@ -56,9 +133,12 @@ impl Sema {
                 Decl::Resource { name, ty, .. } => {
                     self.globals.insert(name.clone(), ty.clone());
                     self.resources.insert(name.clone());
-                    if let Type::Resource(_, state, _) = ty {
+                    if let Type::Resource(_, state, _, dur) = ty {
                         let initial_state = state.clone().unwrap_or_else(|| "Open".to_string());
                         self.resource_states.insert(name.clone(), initial_state);
+                        if let Some(d) = dur {
+                            self.resource_durability.insert(name.clone(), *d);
+                        }
                     }
                 }
             }
@@ -97,6 +177,16 @@ impl Sema {
     pub fn check_expr(&mut self, expr: &Expr, env: &mut HashMap<String, Type>, res_consumed: &mut HashSet<String>, local_resources: &mut HashSet<String>) -> Type {
         match expr {
             Expr::Var(n) => {
+                // LRU Promotion for "Cold" nodes
+                if let Some(dur) = self.resource_durability.get(n).cloned() {
+                    if dur == crate::persistence::Durability::Durable {
+                         // Simulate fetching from CAS/LMDB
+                         let fp = crate::persistence::Fingerprint([0; 16]); // Mock FP for the resource
+                         self.storage.store(vec![0]); // ensure it is in CAS
+                         self.storage.fetch(fp);
+                    }
+                }
+
                 if local_resources.contains(n) || self.resources.contains(n) {
                     // Check if it is a resource that can be consumed or is state-tracked
                     if let Some(ty) = env.get(n) {
@@ -129,23 +219,30 @@ impl Sema {
                     _ => panic!("prev requires later modality"),
                 }
             }
-            Expr::Alloc(ty, args) => {
+            Expr::Alloc(ty, args, dur) => {
                 for arg in args {
                     self.check_expr(arg, env, res_consumed, local_resources);
                 }
-                Type::Co(Box::new(ty.clone()))
+                if let Some(d) = dur {
+                    if *d == crate::persistence::Durability::Durable {
+                         let fp = crate::persistence::Fingerprint([0; 16]);
+                         self.storage.store(vec![0]);
+                         self.storage.fetch(fp);
+                    }
+                }
+                Type::Co(Box::new(ty.clone()), dur.clone())
             }
             Expr::Free(e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
-                    Type::Co(_) => Type::Void,
+                    Type::Co(_, _) => Type::Void,
                     _ => panic!("free requires co type"),
                 }
             }
             Expr::Get(e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
-                    Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner) => *inner,
+                    Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner, _) => *inner,
                     _ => panic!("get requires optic or co type, found {:?}", ty),
                 }
             }
@@ -208,9 +305,12 @@ impl Sema {
             }
             Expr::ResourceDecl(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-                if let Type::Resource(_, state, _) = &ty {
+                if let Type::Resource(_, state, _, dur) = &ty {
                     let initial_state = state.clone().unwrap_or_else(|| "Open".to_string());
                     self.resource_states.insert(n.clone(), initial_state);
+                    if let Some(d) = dur {
+                        self.resource_durability.insert(n.clone(), *d);
+                    }
                 }
                 env.insert(n.clone(), ty);
                 local_resources.insert(n.clone());
@@ -244,7 +344,7 @@ impl Sema {
                 }
 
                 let mut ty = self.check_expr(e, env, res_consumed, local_resources);
-                while let Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner) = ty {
+                while let Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner, _) = ty {
                     ty = *inner;
                 }
                 match ty {
@@ -259,12 +359,52 @@ impl Sema {
                 }
             }
             Expr::Compose(e1, e2) => {
+                // Mock incremental computation with Early Cutoff
+                let query_desc = format!("{:?} | {:?}", e1, e2);
+
+                // Simulate checking sub-expressions
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
 
+                // Determine actual type of composition
+                let mut result_ty = Type::Int; // Default fallback
+                if let Type::ProtocolOptic(p_name, s_name, inner) = &ty2 {
+                    if let Type::Resource(_, current_state, Some(res_protocol), _) = &ty1 {
+                        if p_name == res_protocol && Some(s_name) == current_state.as_ref() {
+                            result_ty = (**inner).clone();
+                        }
+                    } else {
+                        // Check associated optic
+                        let res_assoc = match &ty1 {
+                            Type::Optic(_, res) | Type::RecOptic(_, res) | Type::AtomicOptic(_, res) => res,
+                            _ => &None,
+                        };
+                        if let Some(res_name) = res_assoc {
+                            let res_ty = env.get(res_name).expect("Associated resource not found");
+                            if let Type::Resource(_, current_state, Some(res_protocol), _) = res_ty {
+                                if p_name == res_protocol && Some(s_name) == current_state.as_ref() {
+                                    result_ty = (**inner).clone();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Simulate result and fingerprint
+                let mock_result = format!("Result of {}", query_desc).into_bytes();
+                let new_fp = self.storage.store(mock_result);
+
+                if let Some((old_ty, old_fp)) = self.query_cache.get(&query_desc) {
+                    if old_fp == &new_fp {
+                        // Early Cutoff: halt propagation
+                        return old_ty.clone();
+                    }
+                }
+                self.query_cache.insert(query_desc, (result_ty.clone(), new_fp));
+
                 if let Type::ProtocolOptic(p_name, s_name, inner) = ty2 {
                     // Check if ty1 is a resource associated with this protocol
-                    if let Type::Resource(_, current_state, Some(res_protocol)) = &ty1 {
+                    if let Type::Resource(_, current_state, Some(res_protocol), _) = &ty1 {
                         if &p_name == res_protocol {
                             if Some(&s_name) != current_state.as_ref() {
                                 panic!("Protocol violation: expected state {}, found {:?}", s_name, current_state);
@@ -294,7 +434,7 @@ impl Sema {
 
                     if let Some(res_name) = res_assoc {
                         let res_ty = env.get(&res_name).expect("Associated resource not found");
-                        if let Type::Resource(_, current_state, Some(res_protocol)) = res_ty {
+                        if let Type::Resource(_, current_state, Some(res_protocol), _) = res_ty {
                             if &p_name == res_protocol {
                                 if Some(&s_name) != current_state.as_ref() {
                                     panic!("Protocol violation: expected state {}, found {:?}", s_name, current_state);
@@ -330,7 +470,7 @@ mod tests {
     fn test_linearity() {
         let mut sema = Sema::new();
         let mut env = HashMap::new();
-        env.insert("f".to_string(), Type::Resource(vec![], Some("Consumed".to_string()), None));
+        env.insert("f".to_string(), Type::Resource(vec![], Some("Consumed".to_string()), None, None));
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
         locals.insert("f".to_string());
@@ -416,7 +556,7 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
         sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string())));
 
         sema.check_program(&prog);
@@ -441,7 +581,7 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
         sema.check_program(&prog);
     }
 
@@ -482,7 +622,7 @@ mod tests {
             ],
         };
 
-        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None));
+        sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
         sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string())));
 
         sema.check_program(&prog);
