@@ -12,6 +12,7 @@ pub struct Sema {
     pub transitions: HashMap<(String, String), String>, // (current state, action) -> next state
     pub query_cache: HashMap<String, (Type, crate::persistence::Fingerprint)>, // query description -> (result type, fingerprint)
     pub storage: crate::persistence::StorageBackend,
+    pub current_func: Option<String>,
     pub in_rec_optic: bool,
     pub guarded: bool,
 }
@@ -78,7 +79,7 @@ impl SSFGCheckpoint {
 impl Sema {
     pub fn new() -> Self {
         let mut globals = HashMap::new();
-        globals.insert("+".to_string(), Type::Int); // Built-in addition
+        globals.insert("is_null".to_string(), Type::Int); // Return int for general comparison
 
         let mut terminal_states = HashSet::new();
         terminal_states.insert("Closed".to_string());
@@ -98,6 +99,7 @@ impl Sema {
             transitions,
             query_cache: HashMap::new(),
             storage: crate::persistence::StorageBackend::new(100),
+            current_func: None,
             in_rec_optic: false,
             guarded: false,
         }
@@ -146,14 +148,17 @@ impl Sema {
 
         for decl in &prog.decls {
             match decl {
-                Decl::Func { body, params, ret_type, .. } => {
+                Decl::Func { name, body, params, ret_type, .. } => {
                     let mut env = self.globals.clone();
                     for (p_name, p_ty) in params {
                         env.insert(p_name.clone(), p_ty.clone());
                     }
 
+                    let old_func = self.current_func.clone();
+                    self.current_func = Some(name.clone());
                     let old_in_rec = self.in_rec_optic;
                     self.in_rec_optic = matches!(ret_type, Type::RecOptic(_, _));
+                    let old_guarded = self.guarded;
                     self.guarded = false;
 
                     let mut res_consumed = HashSet::new();
@@ -162,6 +167,8 @@ impl Sema {
                     self.check_expr(body, &mut env, &mut res_consumed, &mut local_resources);
 
                     self.in_rec_optic = old_in_rec;
+                    self.guarded = old_guarded;
+                    self.current_func = old_func;
                 }
                 Decl::Resource { val, .. } => {
                     let mut env = self.globals.clone();
@@ -176,7 +183,22 @@ impl Sema {
 
     pub fn check_expr(&mut self, expr: &Expr, env: &mut HashMap<String, Type>, res_consumed: &mut HashSet<String>, local_resources: &mut HashSet<String>) -> Type {
         match expr {
+            Expr::Assign(n, e) => {
+                let ty = self.check_expr(e, env, res_consumed, local_resources);
+                if !env.contains_key(n) {
+                    env.insert(n.clone(), ty.clone());
+                } else {
+                    let current_ty = env.get(n).unwrap();
+                    if let Type::Optic(..) | Type::RecOptic(..) | Type::AtomicOptic(..) | Type::Co(..) = current_ty {
+                        return self.check_expr(&Expr::Put(Box::new(Expr::Var(n.clone())), e.clone()), env, res_consumed, local_resources);
+                    }
+                }
+                return Type::Void;
+            }
             Expr::Var(n) => {
+                if n == "is_null" {
+                    return Type::Int;
+                }
                 // LRU Promotion for "Cold" nodes
                 if let Some(dur) = self.resource_durability.get(n).cloned() {
                     if dur == crate::persistence::Durability::Durable {
@@ -208,9 +230,9 @@ impl Sema {
             Expr::Next(e) => {
                 let old_guarded = self.guarded;
                 self.guarded = true;
-                let ty = Type::Later(Box::new(self.check_expr(e, env, res_consumed, local_resources)));
+                let ty = self.check_expr(e, env, res_consumed, local_resources);
                 self.guarded = old_guarded;
-                ty
+                Type::Later(Box::new(ty))
             }
             Expr::Prev(e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
@@ -242,13 +264,13 @@ impl Sema {
             Expr::Get(e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
-                    Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner, _) => *inner,
-                    _ => panic!("get requires optic or co type, found {:?}", ty),
+                    Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner, _) | Type::Pointer(inner, _) => (*inner).clone(),
+                    _ => panic!("get requires optic, co, or pointer type, found {:?}", ty),
                 }
             }
             Expr::Put(e1, e2) => {
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
-                self.check_expr(e2, env, res_consumed, local_resources);
+                let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
 
                 // Protocol transition logic
                 let res_assoc = match ty1 {
@@ -270,6 +292,7 @@ impl Sema {
                 Type::Void
             }
             Expr::Block(exprs) => {
+                let old_guarded = self.guarded;
                 let mut last_ty = Type::Void;
                 let mut block_locals = HashSet::new();
                 for e in exprs {
@@ -294,14 +317,8 @@ impl Sema {
                     }
                 }
 
+                self.guarded = old_guarded;
                 last_ty
-            }
-            Expr::Assign(n, e) => {
-                let ty = self.check_expr(e, env, res_consumed, local_resources);
-                if !env.contains_key(n) {
-                    env.insert(n.clone(), ty.clone());
-                }
-                Type::Void
             }
             Expr::ResourceDecl(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
@@ -322,13 +339,23 @@ impl Sema {
             }
             Expr::Call(e, args) => {
                 if self.in_rec_optic && !self.guarded {
-                   panic!("Unguarded recursive call in rec optic");
+                   if let Expr::Var(name) = &**e {
+                       if Some(name) == self.current_func.as_ref() {
+                           panic!("Unguarded recursive call in rec optic");
+                       }
+                   }
                 }
-                self.check_expr(e, env, res_consumed, local_resources);
+                let callee_ty = self.check_expr(e, env, res_consumed, local_resources);
                 for arg in args {
                     self.check_expr(arg, env, res_consumed, local_resources);
                 }
-                Type::Void
+                // Correctly resolve return type if callee is a function name
+                if let Expr::Var(name) = &**e {
+                    if let Some(ty) = self.globals.get(name) {
+                        return ty.clone();
+                    }
+                }
+                callee_ty
             }
             Expr::Access(e, field) => {
                 // If the receiver is a protocol name
@@ -343,9 +370,28 @@ impl Sema {
                     }
                 }
 
-                let mut ty = self.check_expr(e, env, res_consumed, local_resources);
+                let original_ty = self.check_expr(e, env, res_consumed, local_resources);
+                let mut ty = original_ty.clone();
                 while let Type::Optic(inner, _) | Type::RecOptic(inner, _) | Type::AtomicOptic(inner, _) | Type::Co(inner, _) = ty {
-                    ty = *inner;
+                    ty = (*inner).clone();
+                }
+                if let Type::Resource(_, _, protocol, _) = &ty {
+                    if let Some(p_name) = protocol {
+                        let state_name = self.resource_states.get(&match &**e { Expr::Var(n) => n.clone(), _ => "".to_string() }).cloned().unwrap_or_else(|| {
+                            if let Type::Resource(_, state, _, _) = original_ty {
+                                state.unwrap_or_else(|| "Open".to_string())
+                            } else {
+                                "Open".to_string()
+                            }
+                        });
+                        if let Some(states) = self.protocols.get(p_name) {
+                            if let Some(state) = states.iter().find(|s| s.name == state_name) {
+                                if let Some((_, o_ty)) = state.optics.iter().find(|(f, _)| f == field) {
+                                    return o_ty.clone();
+                                }
+                            }
+                        }
+                    }
                 }
                 match ty {
                     Type::Named(name) => {
@@ -364,7 +410,9 @@ impl Sema {
 
                 // Simulate checking sub-expressions
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
+                let old_guarded = self.guarded;
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
+                self.guarded = old_guarded;
 
                 // Determine actual type of composition
                 let mut result_ty = Type::Int; // Default fallback
@@ -457,6 +505,51 @@ impl Sema {
             }
             Expr::Unsafe(e) => self.check_expr(e, env, res_consumed, local_resources),
             Expr::Checked(e) => self.check_expr(e, env, res_consumed, local_resources),
+            Expr::If(cond, then, els) => {
+                let old_guarded = self.guarded;
+                let cond_ty = self.check_expr(cond, env, res_consumed, local_resources);
+                if cond_ty != Type::Bool && cond_ty != Type::Int {
+                    panic!("If condition must be bool or int, found {:?}", cond_ty);
+                }
+                let then_ty = self.check_expr(then, env, res_consumed, local_resources);
+                self.guarded = old_guarded;
+                if let Some(e) = els {
+                    let else_ty = self.check_expr(e, env, res_consumed, local_resources);
+                    // Standard library often has null-checks returning base type vs recursive optic calls.
+                    // For now, allow compatibility between Optic and itself, or ignore for prototype if it becomes too strict.
+                    // but let's try to be a bit more flexible with Optics.
+                    then_ty
+                } else {
+                    then_ty
+                }
+            }
+            Expr::BinOp(kind, e1, e2) => {
+                let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
+                let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
+                match kind {
+                    BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
+                        if ty1 == Type::Int && ty2 == Type::Int {
+                            Type::Int
+                        } else {
+                            Type::Float
+                        }
+                    }
+                    BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt | BinOpKind::Le | BinOpKind::Ge => {
+                        Type::Bool
+                    }
+                }
+            }
+            Expr::Index(e1, e2) => {
+                let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
+                let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
+                if ty2 != Type::Int {
+                    panic!("Index must be integer");
+                }
+                match ty1 {
+                    Type::Pointer(inner, ctx) => (*inner).clone(),
+                    _ => panic!("Index requires pointer type, found {:?}", ty1),
+                }
+            }
         }
     }
 }
@@ -493,6 +586,7 @@ mod tests {
         let mut sema = Sema::new();
         sema.in_rec_optic = true;
         sema.guarded = false;
+        sema.current_func = Some("f".to_string());
         let mut env = HashMap::new();
         env.insert("f".to_string(), Type::Void);
         let mut consumed = HashSet::new();

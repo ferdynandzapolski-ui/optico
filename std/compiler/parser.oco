@@ -1,0 +1,11 @@
+// std/compiler/parser.oco - Parser for self-hosted OptiCo compiler
+
+struct Parser {
+    Lexer lexer;
+    Token current;
+}
+
+Node* parser_parse_node(Parser p) {
+    // Recursive descent placeholder
+    alloc<Node>(1, 1)
+}

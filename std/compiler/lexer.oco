@@ -1,0 +1,23 @@
+// std/compiler/lexer.oco - Lexer for self-hosted OptiCo compiler
+
+struct Token {
+    int tag;
+    String lexeme;
+}
+
+struct Lexer {
+    String input;
+    int pos;
+}
+
+Token lexer_next(Lexer l) {
+    if (l.pos >= l.input.len) {
+        alloc<Token>(0, alloc<String>(0, 0))
+    } else {
+        {
+            char c = string_at(l.input, l.pos);
+            l.pos := l.pos + 1;
+            alloc<Token>(1, alloc<String>(1, 0))
+        }
+    }
+}

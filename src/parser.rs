@@ -289,19 +289,83 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr(&mut self) -> Expr {
-        let mut e = self.parse_postfix_expr();
+        if self.current_token == Token::If {
+            self.advance();
+            self.expect(Token::LParen);
+            let cond = self.parse_expr();
+            self.expect(Token::RParen);
+            let then = self.parse_expr();
+            let mut els = None;
+            if self.current_token == Token::Else {
+                self.advance();
+                els = Some(Box::new(self.parse_expr()));
+            }
+            return Expr::If(Box::new(cond), Box::new(then), els);
+        }
+
+        self.parse_put_expr()
+    }
+
+    fn parse_put_expr(&mut self) -> Expr {
+        let mut e = self.parse_comparison_expr();
         loop {
             match &self.current_token {
                 Token::Pipe => {
                     self.advance();
-                    e = Expr::Compose(Box::new(e), Box::new(self.parse_expr()));
+                    e = Expr::Compose(Box::new(e), Box::new(self.parse_comparison_expr()));
                 }
                 Token::Put => {
                     self.advance();
-                    e = Expr::Put(Box::new(e), Box::new(self.parse_expr()));
+                    e = Expr::Put(Box::new(e), Box::new(self.parse_comparison_expr()));
                 }
                 _ => break,
             }
+        }
+        e
+    }
+
+    fn parse_comparison_expr(&mut self) -> Expr {
+        let mut e = self.parse_additive_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::Eq => BinOpKind::Eq,
+                Token::Ne => BinOpKind::Ne,
+                Token::Lt => BinOpKind::Lt,
+                Token::Gt => BinOpKind::Gt,
+                Token::Le => BinOpKind::Le,
+                Token::Ge => BinOpKind::Ge,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_additive_expr()));
+        }
+        e
+    }
+
+    fn parse_additive_expr(&mut self) -> Expr {
+        let mut e = self.parse_multiplicative_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::Plus => BinOpKind::Add,
+                Token::Minus => BinOpKind::Sub,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_multiplicative_expr()));
+        }
+        e
+    }
+
+    fn parse_multiplicative_expr(&mut self) -> Expr {
+        let mut e = self.parse_postfix_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::Star => BinOpKind::Mul,
+                Token::Slash => BinOpKind::Div,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_postfix_expr()));
         }
         e
     }
@@ -319,6 +383,12 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     e = Expr::Access(Box::new(e), field);
+                }
+                Token::LBracket => {
+                    self.advance();
+                    let index = self.parse_expr();
+                    self.expect(Token::RBracket);
+                    e = Expr::Index(Box::new(e), Box::new(index));
                 }
                 _ => break,
             }
@@ -351,7 +421,11 @@ impl<'a> Parser<'a> {
             Token::Alloc => {
                 self.advance();
                 self.expect(Token::LAngle);
-                let _ty = self.parse_type();
+                let mut _ty = self.parse_type();
+                while self.current_token == Token::Star {
+                    self.advance();
+                    _ty = Type::Optic(Box::new(_ty), None);
+                }
                 let mut dur = None;
                 if self.current_token == Token::Comma {
                     self.advance();
@@ -406,6 +480,11 @@ impl<'a> Parser<'a> {
             Token::Spawn => {
                 self.advance();
                 Expr::Spawn(Box::new(self.parse_expr()))
+            }
+            Token::BoolLit(b) => {
+                let val = *b;
+                self.advance();
+                Expr::ConstBool(val)
             }
             Token::IntLit(n) => {
                 let val = *n;
@@ -521,5 +600,13 @@ mod tests {
             }
             _ => panic!("Expected Global declaration"),
         }
+    }
+
+    #[test]
+    fn test_parser_new_exprs() {
+        let input = "void main() { if (x == y) { x = 1; } else { x = 2; } a = b + c * d; e = f[g]; }";
+        let mut parser = Parser::new(input);
+        let prog = parser.parse_program();
+        assert_eq!(prog.decls.len(), 1);
     }
 }

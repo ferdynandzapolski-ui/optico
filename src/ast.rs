@@ -17,6 +17,12 @@ pub enum Type {
     Pointer(Box<Type>, String), // pointer<τ, ContextID>
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BinOpKind {
+    Add, Sub, Mul, Div,
+    Eq, Ne, Lt, Gt, Le, Ge,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Var(String),
@@ -26,6 +32,9 @@ pub enum Expr {
     ConstChar(char),
     Access(Box<Expr>, String), // e.l
     Call(Box<Expr>, Vec<Expr>), // e1(e2, ...)
+    If(Box<Expr>, Box<Expr>, Option<Box<Expr>>), // if (e1) e2 [else e3]
+    BinOp(BinOpKind, Box<Expr>, Box<Expr>),
+    Index(Box<Expr>, Box<Expr>), // e1[e2]
     Next(Box<Expr>),           // next e
     Prev(Box<Expr>),           // prev e
     Alloc(Type, Vec<Expr>, Option<crate::persistence::Durability>),    // alloc<τ>(...)

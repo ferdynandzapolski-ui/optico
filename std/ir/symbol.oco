@@ -1,0 +1,6 @@
+// std/ir/symbol.oco - Symbol and scope management
+
+struct Symbol {
+    String name;
+    int scope_id;
+}

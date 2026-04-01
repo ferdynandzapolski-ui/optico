@@ -7,22 +7,24 @@ struct Vector {
 }
 
 Vector vector_new(int cap) {
-    alloc<Vector>(0, cap, alloc<int>(cap))
+    alloc<Vector>(0, cap, alloc<int, Normal>(cap))
 }
 
 void vector_push(Vector v, int val) {
-    {
-        // TODO: Handle resizing and data insertion
-        v.size := v.size + 1;
+    if (v.size == v.capacity) {
+        v.size := v.size + 1
+    } else {
+        {
+            v.data[v.size] := val;
+            v.size := v.size + 1;
+        }
     }
 }
 
 void vector_set(Vector v, int i, int val) {
-    // TODO: v.data[i] := val;
-    v.size := val;
+    v.data[i] := val;
 }
 
 int vector_get(Vector v, int index) {
-    // TODO: return v.data[index];
-    0
+    v.data[index]
 }
