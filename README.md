@@ -28,18 +28,20 @@ The syntax introduces types for comonadic contexts, coinductive recursion, and t
 
 ```bnf
 τ ::= Int | Float | Bool | Char | Void
- | Struct{l_i : τ_i} | Resource{l_i : τ_i}
- | co τ                     // Comonadic context (Store)
+ | Struct{l_i : τ_i} | Resource Δ [Σ] // Durability Δ, Initial State Σ
+ | co Δ τ                   // Comonadic context (Store) with Durability Δ
  | optic τ*                 // Coalgebraic view
  | I τ                      // Nakano 'later' modality
  | rec optic τ*             // Coinductive recursive optic
  | atomic optic τ*          // Verified thread-safe optic
  | pointer<τ, ContextID>    // Phantom-lifetime raw pointer
 
+Δ ::= Volatile | Normal | Durable
+
 e ::= x | C | e.l | e₁ | e₂
  | next e                   // Guarded recursion delay
  | prev e                   // Removal of later modality
- | alloc<τ>() | free(e)     // Comonadic management
+ | alloc<τ, Δ>() | free(e)  // Comonadic management with Durability
  | *e | e₁ := e₂             // Lawful Get/Put
  | resource r = e           // Must-consume linear resource
  | unsafe { e }             // Guarded by phantom tokens
@@ -56,7 +58,13 @@ To prevent infinite loops during data retrieval, recursive optics must be produc
 When a context is shared across threads via `spawn`, the compiler requires views into it to be `atomic optic` types. The compiler wraps the `put` operation in hardware-assisted synchronization (CAS or mutexes). The SMT backend proves that these concurrent updates still obey the Put-Put and Get-Put laws under interleaving.
 
 ### 3.3. Linear Resources and SSFG Analysis
-Resources (files, locks) are strictly linear; they must be consumed exactly once. v0.3 uses Source-Sink Flow Graphs (SSFG) to build a reachability map from resource allocation (Source) to consuming optic (Sink). SSFG reduction allows the compiler to verify linearity in linear time.
+Resources (files, locks) are strictly linear; they must be consumed exactly once. v0.3 uses Source-Sink Flow Graphs (SSFG) to build a reachability map from resource allocation (Source) to consuming optic (Sink). SSFG reduction allows the compiler to verify linearity in linear time. The **SSFG Checkpointing** mechanism persists the flow graph state to disk, allowing for cross-restart linearity verification.
+
+### 3.4. Incremental Computation: Zero-Copy CAS + LMDB
+The compiler uses a **Content-Addressable Storage (CAS)** system for IR persistence, backed by the **LMDB** memory-mapped database. This provides:
+- **Zero-Copy Reads**: Page-cache mapped IR nodes accessed directly via memory mapping.
+- **Red-Green Early Cutoff**: 128-bit **Fingerprinting** of query results halts propagation if re-computed hashes match cached values.
+- **Tiered Durability**: `Durable` nodes (StdLib) stay paged, `Normal` nodes follow an **LRU eviction policy**, and `Volatile` nodes reside in hot memory.
 
 ## 4. The Verification Pipeline
 

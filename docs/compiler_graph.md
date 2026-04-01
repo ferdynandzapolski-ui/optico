@@ -27,12 +27,27 @@ protocol NodeSession {
 }
 ```
 
-### 2.1. Disk Backing and Persistence
+### 2.1. Storage Architecture: Zero-Copy CAS + LMDB
 
-To support large codebases, the graph can be backed by disk storage using comonadic contexts with specific `ContextID`s.
+To support large codebases, the graph is backed by a **Zero-Copy Content-Addressable Storage (CAS)** system using **LMDB** as a memory-mapped backing engine. This allows the compiler to treat the entire disk-backed graph as a single comonadic store.
 
-- **Disk Pointer:** `pointer<Node, "Disk">` represents a node stored in a memory-mapped file or a database.
-- **Lazy Loading:** The `co Node*` context transparently manages the transfer between disk and memory via optic-triggered `get` operations.
+- **Content-Addressability:** Each node is identified by a stable 128-bit **Fingerprint** (cryptographic hash).
+- **Zero-Copy Reads:** Nodes are paged directly from the OS page cache into the address space, allowing optics to perform field-offset arithmetic directly on disk-mapped data without deserialization.
+- **Durability Levels:** Nodes are tagged with durability levels to manage memory pressure:
+  - **Volatile:** Temporary nodes residing in the hot heap.
+  - **Normal:** Standard IR nodes eligible for paging to disk.
+  - **Durable:** Standard library and external dependency nodes, pre-loaded in memory-mapped read-only pages.
+- **LRU Paging:** "Cold" nodes are paged into memory on-demand when focused by an optic, with an LRU (Least Recently Used) policy evicting nodes when memory limits are reached.
+
+### 2.2. Incremental Stability: The Red-Green Algorithm
+
+Incremental updates are managed via the **Red-Green Algorithm** for "Early Cutoff" stability:
+1. **Fingerprinting:** Every query result is paired with a 128-bit fingerprint of its inputs.
+2. **Early Cutoff:** If a node's source changes (marking it "Red"), the compiler re-executes the optic. If the new result fingerprint matches the cached one, the compiler marks the node "Green" and halts propagation.
+
+### 2.3. SSFG Persistence
+
+The **Source-Sink Flow Graph (SSFG)** for linear resources is persisted as a "Checkpointed Thread," allowing the compiler to resume linearity verification across restarts without re-analyzing the entire project.
 
 ## 3. Query as Optic Composition
 
