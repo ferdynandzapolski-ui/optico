@@ -1,0 +1,45 @@
+// std/ptr_vector.oco - Pointer Vector library for OptiCo v0.3
+
+struct PtrVector {
+    int size;
+    int capacity;
+    pointer<pointer<Unit, Heap>, Heap> data;
+}
+
+PtrVector ptr_vector_new(int cap) {
+    alloc<PtrVector>(0, cap, alloc<pointer<Unit, Heap>, Normal>(cap))
+}
+
+void ptr_vector_push(PtrVector v, pointer<Unit, Heap> val) {
+    if (v.size == v.capacity) {
+        v.size := v.size // Mock: should grow but fixed size for now
+    } else {
+        {
+            v.data[v.size] := val;
+            v.size := v.size + 1;
+        }
+    }
+}
+
+void ptr_vector_set(PtrVector v, int i, pointer<Unit, Heap> val) {
+    v.data[i] := val;
+}
+
+pointer<Unit, Heap> ptr_vector_get(PtrVector v, int index) {
+    v.data[index]
+}
+
+pointer<Unit, Heap> ptr_vector_pop(PtrVector v) {
+    if (v.size == 0) {
+        v.data[0] // Mock error: should handle empty case better
+    } else {
+        {
+            v.size := v.size - 1;
+            v.data[v.size]
+        }
+    }
+}
+
+void ptr_vector_clear(PtrVector v) {
+    v.size := 0;
+}

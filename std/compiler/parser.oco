@@ -5,7 +5,51 @@ struct Parser {
     Token current;
 }
 
-Node* parser_parse_node(Parser p) {
-    // Recursive descent placeholder
-    alloc<Node>(1, 1)
+void parser_advance(Parser p) {
+    p.current := lexer_next_token(p.lexer);
+}
+
+Node* parser_parse_struct_decl(Parser p) {
+    {
+        // struct keyword
+        parser_advance(p);
+        // name
+        String name = p.current.lexeme;
+        parser_advance(p);
+        // {
+        parser_advance(p);
+
+        PtrVector fields = ptr_vector_new(10);
+
+        // Simplified field parsing loop
+        if (p.current.tag != 2) { // Not RBrace
+            {
+                // Field parsing logic...
+                0
+            }
+        } else {
+            0
+        }
+
+        parser_advance(p); // }
+
+        alloc<Node>(1, 1, name, fields)
+    }
+}
+
+Node* parser_parse_func_decl(Parser p) {
+    {
+        // ret_type
+        parser_advance(p);
+        // name
+        String name = p.current.lexeme;
+        parser_advance(p);
+        // (
+        parser_advance(p);
+        // )
+        parser_advance(p);
+
+        PtrVector children = ptr_vector_new(0);
+        alloc<Node>(2, 1, name, children)
+    }
 }

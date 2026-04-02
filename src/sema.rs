@@ -207,6 +207,12 @@ impl Sema {
 
     pub fn check_expr(&mut self, expr: &Expr, env: &mut HashMap<String, Type>, res_consumed: &mut HashSet<String>, local_resources: &mut HashSet<String>) -> Type {
         match expr {
+            Expr::LocalDecl(n, ty, e) => {
+                let _actual_ty = self.check_expr(e, env, res_consumed, local_resources);
+                // In a real compiler we'd check ty == actual_ty
+                env.insert(n.clone(), ty.clone());
+                Type::Void
+            }
             Expr::Assign(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
 

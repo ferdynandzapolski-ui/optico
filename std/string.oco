@@ -31,3 +31,55 @@ bool string_equal_rec(pointer<char, Heap> d1, pointer<char, Heap> d2, int len, i
         }
     }
 }
+
+int string_compare(String s1, String s2) {
+    string_compare_rec(s1.data, s1.len, s2.data, s2.len, 0)
+}
+
+int string_compare_rec(pointer<char, Heap> d1, int l1, pointer<char, Heap> d2, int l2, int i) {
+    if (i == l1) {
+        if (i == l2) {
+            0
+        } else {
+            0 - 1
+        }
+    } else {
+        if (i == l2) {
+            1
+        } else {
+            if (d1[i] == d2[i]) {
+                string_compare_rec(d1, l1, d2, l2, i + 1)
+            } else {
+                if (d1[i] < d2[i]) {
+                    0 - 1
+                } else {
+                    1
+                }
+            }
+        }
+    }
+}
+
+bool string_starts_with(String s, String prefix) {
+    if (s.len < prefix.len) {
+        false
+    } else {
+        if (prefix.len == 0) {
+            true
+        } else {
+            string_starts_with_rec(s.data, prefix.data, prefix.len, 0)
+        }
+    }
+}
+
+bool string_starts_with_rec(pointer<char, Heap> d, pointer<char, Heap> p, int len, int i) {
+    if (i == len) {
+        true
+    } else {
+        if (d[i] == p[i]) {
+            string_starts_with_rec(d, p, len, i + 1)
+        } else {
+            false
+        }
+    }
+}

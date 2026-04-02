@@ -1,11 +1,13 @@
 // std/ir/type.oco - Type system representation
 
-struct Type {
+struct TypeIR {
     String kind;
     int size;
+    PtrVector params;
 }
 
 struct IR {
     int opcode;
     int value;
+    PtrVector inputs;
 }

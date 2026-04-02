@@ -10,7 +10,7 @@ pub enum Token {
     FloatLit(f64),
     BoolLit(bool),
     CharLit(char),
-    LBrace, RBrace, LParen, RParen, LBracket, RBracket, LAngle, RAngle,
+    LBrace, RBrace, LParen, RParen, LBracket, RBracket,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
     Bang, Plus, Minus, Slash,
     Eq, Ne, Lt, Gt, Le, Ge,
@@ -112,7 +112,7 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     Token::Le
                 } else {
-                    Token::LAngle
+                    Token::Lt
                 }
             }
             '>' => {
@@ -120,7 +120,7 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     Token::Ge
                 } else {
-                    Token::RAngle
+                    Token::Gt
                 }
             }
             '\'' => {
@@ -202,9 +202,9 @@ mod tests {
         assert_eq!(lexer.next_token(), Token::Ident("counter".to_string()));
         assert_eq!(lexer.next_token(), Token::Assign);
         assert_eq!(lexer.next_token(), Token::Alloc);
-        assert_eq!(lexer.next_token(), Token::LAngle);
+        assert_eq!(lexer.next_token(), Token::Lt);
         assert_eq!(lexer.next_token(), Token::IntType);
-        assert_eq!(lexer.next_token(), Token::RAngle);
+        assert_eq!(lexer.next_token(), Token::Gt);
         assert_eq!(lexer.next_token(), Token::LParen);
         assert_eq!(lexer.next_token(), Token::IntLit(0));
         assert_eq!(lexer.next_token(), Token::RParen);
