@@ -14,7 +14,7 @@ pub struct Sema {
     pub storage: crate::persistence::StorageBackend,
     pub current_func: Option<String>,
     pub in_rec_optic: bool,
-    pub guarded: bool,
+    pub guarded: HashSet<Option<String>>, // clocks currently guarded
     pub c_heap_allocations: HashMap<String, String>, // ptr_name -> state (Allocated/Freed)
     pub lifting_hints: HashMap<String, Type>,       // var_name -> inferred optic type
     pub c_double_frees: HashSet<String>,
@@ -106,7 +106,7 @@ impl Sema {
             storage: crate::persistence::StorageBackend::new(100),
             current_func: None,
             in_rec_optic: false,
-            guarded: false,
+            guarded: HashSet::new(),
             c_heap_allocations: HashMap::new(),
             lifting_hints: HashMap::new(),
             c_double_frees: HashSet::new(),
@@ -181,8 +181,8 @@ impl Sema {
                     self.current_func = Some(name.clone());
                     let old_in_rec = self.in_rec_optic;
                     self.in_rec_optic = matches!(ret_type, Type::RecOptic(_, _));
-                    let old_guarded = self.guarded;
-                    self.guarded = false;
+                    let old_guarded = self.guarded.clone();
+                    self.guarded.clear();
 
                     let mut res_consumed = HashSet::new();
                     let mut local_resources = HashSet::new();
@@ -294,17 +294,23 @@ impl Sema {
             Expr::ConstFloat(_) => Type::Float,
             Expr::ConstBool(_) => Type::Bool,
             Expr::ConstChar(_) => Type::Char,
-            Expr::Next(e) => {
-                let old_guarded = self.guarded;
-                self.guarded = true;
+            Expr::Next(e, clock) => {
+                let added = self.guarded.insert(clock.clone());
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-                self.guarded = old_guarded;
-                Type::Later(Box::new(ty))
+                if added {
+                    self.guarded.remove(clock);
+                }
+                Type::Later(Box::new(ty), clock.clone())
             }
-            Expr::Prev(e) => {
+            Expr::Prev(e, clock) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
-                    Type::Later(inner) => *inner,
+                    Type::Later(inner, c) => {
+                        if &c != clock {
+                            panic!("Clock mismatch in prev: expected {:?}, found {:?}", clock, c);
+                        }
+                        *inner
+                    }
                     _ => panic!("prev requires later modality"),
                 }
             }
@@ -369,7 +375,7 @@ impl Sema {
                 Type::Void
             }
             Expr::Block(exprs) => {
-                let old_guarded = self.guarded;
+                let old_guarded = self.guarded.clone();
                 let mut last_ty = Type::Void;
                 let mut block_locals = HashSet::new();
                 for e in exprs {
@@ -431,7 +437,7 @@ impl Sema {
                     }
                 }
 
-                if self.in_rec_optic && !self.guarded {
+                if self.in_rec_optic && self.guarded.is_empty() {
                    if let Expr::Var(name) = &**e {
                        if Some(name) == self.current_func.as_ref() {
                            panic!("Unguarded recursive call in rec optic");
@@ -499,7 +505,7 @@ impl Sema {
             Expr::Compose(e1, e2) => {
                 let query_desc = format!("{:?} | {:?}", e1, e2);
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
-                let old_guarded = self.guarded;
+                let old_guarded = self.guarded.clone();
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
                 self.guarded = old_guarded;
 
@@ -587,7 +593,7 @@ impl Sema {
                 ty
             }
             Expr::If(cond, then, els) => {
-                let old_guarded = self.guarded;
+                let old_guarded = self.guarded.clone();
                 let cond_ty = self.check_expr(cond, env, res_consumed, local_resources);
                 if cond_ty != Type::Bool && cond_ty != Type::Int {
                     panic!("If condition must be bool or int, found {:?}", cond_ty);
@@ -678,7 +684,7 @@ mod tests {
     fn test_productivity() {
         let mut sema = Sema::new();
         sema.in_rec_optic = true;
-        sema.guarded = false;
+        sema.guarded = HashSet::new();
         sema.current_func = Some("f".to_string());
         let mut env = HashMap::new();
         env.insert("f".to_string(), Type::Void);
@@ -693,13 +699,13 @@ mod tests {
     fn test_productive_call() {
         let mut sema = Sema::new();
         sema.in_rec_optic = true;
-        sema.guarded = false;
+        sema.guarded = HashSet::new();
         let mut env = HashMap::new();
         env.insert("f".to_string(), Type::Void);
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
 
-        let expr = Expr::Next(Box::new(Expr::Call(Box::new(Expr::Var("f".to_string())), vec![])));
+        let expr = Expr::Next(Box::new(Expr::Call(Box::new(Expr::Var("f".to_string())), vec![])), None);
         sema.check_expr(&expr, &mut env, &mut consumed, &mut locals);
     }
 

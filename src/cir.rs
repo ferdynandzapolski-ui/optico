@@ -12,8 +12,8 @@ pub enum CIROp {
     Fetch(crate::persistence::Fingerprint),
     Persist(Box<CIROp>, Option<crate::persistence::Durability>),
     Checkpoint(String), // Session/SSFG checkpoint name
-    Next(Box<CIROp>),
-    Prev(Box<CIROp>),
+    Next(Box<CIROp>, Option<String>),
+    Prev(Box<CIROp>, Option<String>),
     Call(String, Vec<CIROp>),
     Spawn(Box<CIROp>),
     Block(Vec<CIROp>),
@@ -65,8 +65,8 @@ impl CIRLowerer {
     pub fn lower_expr(expr: &Expr) -> CIROp {
         match expr {
             Expr::Var(n) => CIROp::Load(n.clone()),
-            Expr::Next(e) => CIROp::Next(Box::new(Self::lower_expr(e))),
-            Expr::Prev(e) => CIROp::Prev(Box::new(Self::lower_expr(e))),
+            Expr::Next(e, clock) => CIROp::Next(Box::new(Self::lower_expr(e)), clock.clone()),
+            Expr::Prev(e, clock) => CIROp::Prev(Box::new(Self::lower_expr(e)), clock.clone()),
             Expr::Alloc(ty, args, dur) => CIROp::Alloc(ty.clone(), args.iter().map(Self::lower_expr).collect(), dur.clone()),
             Expr::Free(e) => CIROp::Free(Box::new(Self::lower_expr(e))),
             Expr::Get(e) => CIROp::Get(Box::new(Self::lower_expr(e))),
@@ -93,8 +93,8 @@ mod tests {
 
     #[test]
     fn test_cir_lower() {
-        let expr = Expr::Next(Box::new(Expr::Var("x".to_string())));
+        let expr = Expr::Next(Box::new(Expr::Var("x".to_string())), None);
         let cir = CIRLowerer::lower_expr(&expr);
-        assert_eq!(cir, CIROp::Next(Box::new(CIROp::Load("x".to_string()))));
+        assert_eq!(cir, CIROp::Next(Box::new(CIROp::Load("x".to_string())), None));
     }
 }

@@ -33,8 +33,8 @@ impl CodeGenerator {
             CIROp::Fetch(fp) => format!("{}fetch {:?}", pad, fp),
             CIROp::Persist(v, dur) => format!("{}persist (\n{}{},\n{}  {:?})", pad, Self::gen_op(v, indent + 1), pad, pad, dur),
             CIROp::Checkpoint(n) => format!("{}checkpoint {}", pad, n),
-            CIROp::Next(e) => format!("{}next (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
-            CIROp::Prev(e) => format!("{}prev (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
+            CIROp::Next(e, clock) => format!("{}next<{:?}> (\n{}{})", pad, clock, Self::gen_op(e, indent + 1), pad),
+            CIROp::Prev(e, clock) => format!("{}prev<{:?}> (\n{}{})", pad, clock, Self::gen_op(e, indent + 1), pad),
             CIROp::Call(n, args) => {
                 let mut s = format!("{}call {} (\n", pad, n);
                 for arg in args {

@@ -6,3 +6,4 @@ pub mod cir;
 pub mod codegen;
 pub mod persistence;
 pub mod std_tests;
+pub mod temporal_tests;

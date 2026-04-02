@@ -242,6 +242,19 @@ impl<'a> Parser<'a> {
                 }
                 Type::Traversal(Box::new(inner), res_assoc)
             }
+            Token::Later => {
+                self.advance();
+                let mut clock = None;
+                if self.current_token == Token::Lt {
+                    self.advance();
+                    if let Token::Ident(n) = &self.current_token {
+                        clock = Some(n.clone());
+                        self.advance();
+                    }
+                    self.expect(Token::Gt);
+                }
+                Type::Later(Box::new(self.parse_type()), clock)
+            }
             Token::Rec => {
                 self.advance();
                 self.expect(Token::Optic);
@@ -469,11 +482,29 @@ impl<'a> Parser<'a> {
             }
             Token::Next => {
                 self.advance();
-                Expr::Next(Box::new(self.parse_expr()))
+                let mut clock = None;
+                if self.current_token == Token::Lt {
+                    self.advance();
+                    if let Token::Ident(n) = &self.current_token {
+                        clock = Some(n.clone());
+                        self.advance();
+                    }
+                    self.expect(Token::Gt);
+                }
+                Expr::Next(Box::new(self.parse_expr()), clock)
             }
             Token::Prev => {
                 self.advance();
-                Expr::Prev(Box::new(self.parse_expr()))
+                let mut clock = None;
+                if self.current_token == Token::Lt {
+                    self.advance();
+                    if let Token::Ident(n) = &self.current_token {
+                        clock = Some(n.clone());
+                        self.advance();
+                    }
+                    self.expect(Token::Gt);
+                }
+                Expr::Prev(Box::new(self.parse_expr()), clock)
             }
             Token::Alloc => {
                 self.advance();
@@ -560,7 +591,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Expr::ConstChar(val)
             }
-            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct => {
+            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct | Token::Later => {
                 let _ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),

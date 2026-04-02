@@ -12,7 +12,7 @@ pub enum Type {
     Co(Box<Type>, Option<crate::persistence::Durability>, Option<String>), // co Δ τ (with optional ContextID)
     Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
     Traversal(Box<Type>, Option<String>),      // traversal τ*
-    Later(Box<Type>),          // I τ
+    Later(Box<Type>, Option<String>),          // I<k> τ
     RecOptic(Box<Type>, Option<String>),       // rec optic τ* (with optional resource association)
     AtomicOptic(Box<Type>, Option<String>),    // atomic optic τ* (with optional resource association)
     Pointer(Box<Type>, String), // pointer<τ, ContextID>
@@ -36,8 +36,8 @@ pub enum Expr {
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>), // if (e1) e2 [else e3]
     BinOp(BinOpKind, Box<Expr>, Box<Expr>),
     Index(Box<Expr>, Box<Expr>), // e1[e2]
-    Next(Box<Expr>),           // next e
-    Prev(Box<Expr>),           // prev e
+    Next(Box<Expr>, Option<String>),           // next<k> e
+    Prev(Box<Expr>, Option<String>),           // prev<k> e
     Alloc(Type, Vec<Expr>, Option<crate::persistence::Durability>),    // alloc<τ>(...)
     Free(Box<Expr>),           // free(e)
     Get(Box<Expr>),            // *e
