@@ -28,3 +28,18 @@ void vector_set(Vector v, int i, int val) {
 int vector_get(Vector v, int index) {
     v.data[index]
 }
+
+int vector_pop(Vector v) {
+    if (v.size == 0) {
+        0
+    } else {
+        {
+            v.size := v.size - 1;
+            v.data[v.size]
+        }
+    }
+}
+
+void vector_clear(Vector v) {
+    v.size := 0;
+}

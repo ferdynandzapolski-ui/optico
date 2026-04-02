@@ -204,13 +204,13 @@ impl<'a> Parser<'a> {
                         _ => {}
                     }
                 }
-                if self.current_token == Token::LAngle {
+                if self.current_token == Token::Lt {
                     self.advance();
                     if let Token::Ident(n) = &self.current_token {
                         ctx = Some(n.clone());
                         self.advance();
                     }
-                    self.expect(Token::RAngle);
+                    self.expect(Token::Gt);
                 }
                 Type::Co(Box::new(self.parse_type()), dur, ctx)
             }
@@ -274,7 +274,7 @@ impl<'a> Parser<'a> {
             }
             Token::Pointer => {
                 self.advance();
-                self.expect(Token::LAngle);
+                self.expect(Token::Lt);
                 let inner = self.parse_type();
                 self.expect(Token::Comma);
                 let ctx = match &self.current_token {
@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
                     _ => panic!("Expected context ID"),
                 };
                 self.advance();
-                self.expect(Token::RAngle);
+                self.expect(Token::Gt);
                 Type::Pointer(Box::new(inner), ctx)
             }
             Token::Ident(n) => {
@@ -477,7 +477,7 @@ impl<'a> Parser<'a> {
             }
             Token::Alloc => {
                 self.advance();
-                self.expect(Token::LAngle);
+                self.expect(Token::Lt);
                 let mut _ty = self.parse_type();
                 while self.current_token == Token::Star {
                     self.advance();
@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
                     }
                     self.advance();
                 }
-                self.expect(Token::RAngle);
+                self.expect(Token::Gt);
                 self.expect(Token::LParen);
                 let mut args = Vec::new();
                 while self.current_token != Token::RParen {
@@ -575,12 +575,45 @@ impl<'a> Parser<'a> {
                 }
             }
             Token::Ident(n) => {
-                let name = n.clone();
-                self.advance();
-                if self.current_token == Token::Assign {
+                // Peek ahead to see if this is a type or a variable
+                let mut lex_copy = self.lexer.clone();
+                let next = lex_copy.next_token();
+                let is_decl = match next {
+                    Token::Ident(_) | Token::Star | Token::Lt => {
+                        // Check if it's not actually an expression like a < b or x * y
+                        let mut next_lex = lex_copy.clone();
+                        let after_next = next_lex.next_token();
+                        match after_next {
+                            Token::Assign | Token::Star | Token::Lt | Token::Ident(_) | Token::Comma | Token::Gt | Token::Semi => true,
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
+
+                if is_decl {
+                    let ty = self.parse_type();
+                    let name = match &self.current_token {
+                        Token::Ident(n) => n.clone(),
+                        _ => panic!("Expected identifier after type in expr, found {:?}", self.current_token),
+                    };
                     self.advance();
-                    Expr::Assign(name, Box::new(self.parse_expr()))
-                } else if self.current_token == Token::LParen {
+                    if self.current_token == Token::Assign {
+                        self.advance();
+                        let val = self.parse_expr();
+                        Expr::LocalDecl(name, ty, Box::new(val))
+                    } else {
+                        // Named variable declaration without assignment is not currently supported in local scope
+                        // or it was just a named type used in another context.
+                        Expr::Var(name)
+                    }
+                } else {
+                    let name = n.clone();
+                    self.advance();
+                    if self.current_token == Token::Assign {
+                        self.advance();
+                        Expr::Assign(name, Box::new(self.parse_expr()))
+                    } else if self.current_token == Token::LParen {
                     self.advance();
                     let mut args = Vec::new();
                     while self.current_token != Token::RParen {
@@ -589,10 +622,11 @@ impl<'a> Parser<'a> {
                             self.advance();
                         }
                     }
-                    self.expect(Token::RParen);
-                    Expr::Call(Box::new(Expr::Var(name)), args)
-                } else {
-                    Expr::Var(name)
+                        self.expect(Token::RParen);
+                        Expr::Call(Box::new(Expr::Var(name)), args)
+                    } else {
+                        Expr::Var(name)
+                    }
                 }
             }
             _ => panic!("Unexpected token in expression: {:?}", self.current_token),

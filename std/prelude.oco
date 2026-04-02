@@ -74,3 +74,31 @@ int unwrap(OptionInt o) {
 int is_ok(ResultInt r) {
     r.tag
 }
+
+bool is_digit(char c) {
+    if (c >= '0') {
+        c <= '9'
+    } else {
+        false
+    }
+}
+
+bool is_alpha(char c) {
+    if (c >= 'a') {
+        c <= 'z'
+    } else {
+        if (c >= 'A') {
+            c <= 'Z'
+        } else {
+            c == '_'
+        }
+    }
+}
+
+bool is_alnum(char c) {
+    if (is_alpha(c)) {
+        true
+    } else {
+        is_digit(c)
+    }
+}

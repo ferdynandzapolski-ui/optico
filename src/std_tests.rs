@@ -36,6 +36,11 @@ mod tests {
     }
 
     #[test]
+    fn test_ptr_vector_sema() {
+        check_file("std/ptr_vector.oco");
+    }
+
+    #[test]
     fn test_map_sema() {
         check_file("std/map.oco");
     }
@@ -48,7 +53,13 @@ mod tests {
 
     #[test]
     fn test_ir_node_sema() {
-        check_file("std/ir/node.oco");
+        let mut full_content = fs::read_to_string("std/prelude.oco").unwrap();
+        full_content.push_str(&fs::read_to_string("std/ptr_vector.oco").unwrap());
+        full_content.push_str(&fs::read_to_string("std/ir/node.oco").unwrap());
+        let mut parser = Parser::new(&full_content);
+        let prog = parser.parse_program();
+        let mut sema = Sema::new();
+        sema.check_program(&prog);
     }
 
     #[test]
@@ -58,7 +69,13 @@ mod tests {
 
     #[test]
     fn test_ir_type_sema() {
-        check_file("std/ir/type.oco");
+        let mut full_content = fs::read_to_string("std/prelude.oco").unwrap();
+        full_content.push_str(&fs::read_to_string("std/ptr_vector.oco").unwrap());
+        full_content.push_str(&fs::read_to_string("std/ir/type.oco").unwrap());
+        let mut parser = Parser::new(&full_content);
+        let prog = parser.parse_program();
+        let mut sema = Sema::new();
+        sema.check_program(&prog);
     }
 
     #[test]
@@ -77,6 +94,7 @@ mod tests {
         // Need to include ir nodes for parser
         let mut full_content = fs::read_to_string("std/prelude.oco").unwrap();
         full_content.push_str(&fs::read_to_string("std/string.oco").unwrap());
+        full_content.push_str(&fs::read_to_string("std/ptr_vector.oco").unwrap());
         full_content.push_str(&fs::read_to_string("std/ir/node.oco").unwrap());
         full_content.push_str(&fs::read_to_string("std/compiler/lexer.oco").unwrap());
         full_content.push_str(&fs::read_to_string("std/compiler/parser.oco").unwrap());
