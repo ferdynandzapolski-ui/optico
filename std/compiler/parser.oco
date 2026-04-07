@@ -1,4 +1,4 @@
-// std/compiler/parser.oco - Parser for self-hosted OptiCo compiler
+// std/compiler/parser.oco - Parser for self-hosted OptiCo v0.3 compiler
 
 struct Parser {
     Lexer lexer;
@@ -9,47 +9,108 @@ void parser_advance(Parser p) {
     p.current := lexer_next_token(p.lexer);
 }
 
-Node* parser_parse_struct_decl(Parser p) {
+Node* parser_parse_primary(Parser p) {
     {
-        // struct keyword
-        parser_advance(p);
-        // name
-        String name = p.current.lexeme;
-        parser_advance(p);
-        // {
-        parser_advance(p);
-
-        PtrVector fields = ptr_vector_new(10);
-
-        // Simplified field parsing loop
-        if (p.current.tag != 2) { // Not RBrace
+        if (p.current.tag == 20) { // Number
             {
-                // Field parsing logic...
-                0
+                String lex = p.current.lexeme;
+                parser_advance(p);
+                alloc<Node>(10, 0, lex, ptr_vector_new(0))
             }
         } else {
-            0
+            if (p.current.tag == 21) { // Ident
+                {
+                    String lex = p.current.lexeme;
+                    parser_advance(p);
+                    alloc<Node>(11, 0, lex, ptr_vector_new(0))
+                }
+            } else {
+                if (p.current.tag == 3) { // LParen
+                    {
+                        parser_advance(p);
+                        Node* e = parser_parse_expr(p);
+                        if (p.current.tag == 4) { // RParen
+                            parser_advance(p);
+                        } else { 0 };
+                        e
+                    }
+                } else {
+                    alloc<Node>(99, 0, alloc<String>(0, alloc<char, Normal>(0)), ptr_vector_new(0))
+                }
+            }
         }
-
-        parser_advance(p); // }
-
-        alloc<Node>(1, 1, name, fields)
     }
 }
 
-Node* parser_parse_func_decl(Parser p) {
+Node* parser_parse_postfix(Parser p) {
     {
-        // ret_type
-        parser_advance(p);
-        // name
-        String name = p.current.lexeme;
-        parser_advance(p);
-        // (
-        parser_advance(p);
-        // )
-        parser_advance(p);
+        Node* e = parser_parse_primary(p);
+        if (p.current.tag == 12) { // Arrow
+            {
+                parser_advance(p);
+                String field = p.current.lexeme;
+                parser_advance(p);
+                PtrVector children = ptr_vector_new(1);
+                ptr_vector_push(children, e);
+                alloc<Node>(12, 0, field, children)
+            }
+        } else {
+            e
+        }
+    }
+}
 
-        PtrVector children = ptr_vector_new(0);
-        alloc<Node>(2, 1, name, children)
+Node* parser_parse_expr(Parser p) {
+    {
+        Node* e = parser_parse_postfix(p);
+        if (p.current.tag == 11) { // Plus
+            {
+                parser_advance(p);
+                Node* right = parser_parse_expr(p);
+                PtrVector children = ptr_vector_new(2);
+                ptr_vector_push(children, e);
+                ptr_vector_push(children, right);
+                alloc<Node>(13, 0, alloc<String>(1, alloc<char, Normal>(1)), children)
+            }
+        } else {
+            e
+        }
+    }
+}
+
+Node* parser_parse_stmt(Parser p) {
+    {
+        Node* e = parser_parse_expr(p);
+        if (p.current.tag == 7) { // Semi
+            parser_advance(p);
+        } else { 0 };
+        e
+    }
+}
+
+Node* parser_parse_decl(Parser p) {
+    {
+        if (p.current.tag == 21) { // Type name (simplified)
+            {
+                String ty = p.current.lexeme;
+                parser_advance(p);
+                String name = p.current.lexeme;
+                parser_advance(p);
+                if (p.current.tag == 3) { // Function LParen
+                    {
+                        parser_advance(p); // (
+                        parser_advance(p); // )
+                        Node* body = parser_parse_primary(p);
+                        PtrVector children = ptr_vector_new(1);
+                        ptr_vector_push(children, body);
+                        alloc<Node>(1, 0, name, children)
+                    }
+                } else {
+                    alloc<Node>(2, 0, name, ptr_vector_new(0))
+                }
+            }
+        } else {
+            alloc<Node>(99, 0, p.current.lexeme, ptr_vector_new(0))
+        }
     }
 }

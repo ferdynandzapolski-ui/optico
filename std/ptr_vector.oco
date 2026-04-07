@@ -1,5 +1,10 @@
 // std/ptr_vector.oco - Pointer Vector library for OptiCo v0.3
 
+extern "C" {
+    pointer<pointer<Unit, Heap>, Heap> malloc_ptr(int size);
+    void free_ptr(pointer<pointer<Unit, Heap>, Heap> ptr);
+}
+
 struct PtrVector {
     int size;
     int capacity;
@@ -7,12 +12,34 @@ struct PtrVector {
 }
 
 PtrVector ptr_vector_new(int cap) {
-    alloc<PtrVector>(0, cap, alloc<pointer<Unit, Heap>, Normal>(cap))
+    alloc<PtrVector>(0, cap, malloc_ptr(cap * 8))
+}
+
+void ptr_vector_copy_rec(pointer<pointer<Unit, Heap>, Heap> dst, pointer<pointer<Unit, Heap>, Heap> src, int count, int i) {
+    if (i < count) {
+        {
+            dst[i] := src[i];
+            ptr_vector_copy_rec(dst, src, count, i + 1);
+        }
+    } else {
+        0
+    }
 }
 
 void ptr_vector_push(PtrVector v, pointer<Unit, Heap> val) {
     if (v.size == v.capacity) {
-        v.size := v.size // Mock: should grow but fixed size for now
+        {
+            int new_cap = v.capacity * 2;
+            if (new_cap == 0) {
+                new_cap = 4;
+            } else { 0 };
+            pointer<pointer<Unit, Heap>, Heap> new_data = malloc_ptr(new_cap * 8);
+            ptr_vector_copy_rec(new_data, v.data, v.size, 0);
+            v.data := new_data;
+            v.capacity := new_cap;
+            v.data[v.size] := val;
+            v.size := v.size + 1;
+        }
     } else {
         {
             v.data[v.size] := val;
@@ -31,7 +58,7 @@ pointer<Unit, Heap> ptr_vector_get(PtrVector v, int index) {
 
 pointer<Unit, Heap> ptr_vector_pop(PtrVector v) {
     if (v.size == 0) {
-        v.data[0] // Mock error: should handle empty case better
+        v.data[0]
     } else {
         {
             v.size := v.size - 1;

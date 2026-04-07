@@ -20,6 +20,27 @@ bool string_equal(String s1, String s2) {
     }
 }
 
+String string_concat(String s1, String s2) {
+    {
+        int new_len = s1.len + s2.len;
+        pointer<char, Normal> new_data = alloc<char, Normal>(new_len);
+        string_copy_rec(new_data, s1.data, s1.len, 0, 0);
+        string_copy_rec(new_data, s2.data, s2.len, s1.len, 0);
+        alloc<String>(new_len, new_data)
+    }
+}
+
+void string_copy_rec(pointer<char, Normal> dst, pointer<char, Heap> src, int len, int dst_off, int i) {
+    if (i < len) {
+        {
+            dst[dst_off + i] := src[i];
+            string_copy_rec(dst, src, len, dst_off, i + 1);
+        }
+    } else {
+        0
+    }
+}
+
 bool string_equal_rec(pointer<char, Heap> d1, pointer<char, Heap> d2, int len, int i) {
     if (i == len) {
         true

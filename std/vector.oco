@@ -1,5 +1,10 @@
 // std/vector.oco - Vector library for OptiCo v0.3
 
+extern "C" {
+    pointer<int, Heap> malloc_int(int size);
+    void free_int(pointer<int, Heap> ptr);
+}
+
 struct Vector {
     int size;
     int capacity;
@@ -7,12 +12,34 @@ struct Vector {
 }
 
 Vector vector_new(int cap) {
-    alloc<Vector>(0, cap, alloc<int, Normal>(cap))
+    alloc<Vector>(0, cap, malloc_int(cap * 4))
+}
+
+void vector_copy_rec(pointer<int, Heap> dst, pointer<int, Heap> src, int num, int i) {
+    if (i < num) {
+        {
+            dst[i] := src[i];
+            vector_copy_rec(dst, src, num, i + 1);
+        }
+    } else {
+        0
+    }
 }
 
 void vector_push(Vector v, int val) {
     if (v.size == v.capacity) {
-        v.size := v.size + 1
+        {
+            int new_cap = v.capacity * 2;
+            if (new_cap == 0) {
+                new_cap = 4;
+            } else { 0 };
+            pointer<int, Heap> new_data = malloc_int(new_cap * 4);
+            vector_copy_rec(new_data, v.data, v.size, 0);
+            v.data := new_data;
+            v.capacity := new_cap;
+            v.data[v.size] := val;
+            v.size := v.size + 1;
+        }
     } else {
         {
             v.data[v.size] := val;
