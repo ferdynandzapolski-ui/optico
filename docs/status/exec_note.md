@@ -31,12 +31,12 @@ This section establishes the topological execution order for the GOIR project ta
 
 ## Topological Sort
 
-1.  **exec_note**: Executive orchestration note for autonomous agents.
-2.  **fnd_scope_baseline**: Project charter: scope, goals, UB-to-trap stance, policy knobs.
-3.  **fnd_refs_bundle**: Bundle canonical references and local dev notes.
-4.  **fnd_repo_scaffold**: Repo scaffolding, build system, toolchain pin strategy.
-5.  **fnd_goir_spec**: GOIR specification: syntax, type system, grade algebra, lowering strategy.
-6.  **fnd_grade_format**: Grade record layout, serialization, and trace schema.
+1.  **exec_note**: Executive orchestration note for autonomous agents. [Status: Completed]
+2.  **fnd_scope_baseline**: Project charter: scope, goals, UB-to-trap stance, policy knobs. [Status: Completed]
+3.  **fnd_refs_bundle**: Bundle canonical references and local dev notes. [Status: Completed]
+4.  **fnd_repo_scaffold**: Repo scaffolding, build system, toolchain pin strategy. [Status: Completed]
+5.  **fnd_goir_spec**: GOIR specification: syntax, type system, grade algebra, lowering strategy. [Status: Completed]
+6.  **fnd_grade_format**: Grade record layout, serialization, and trace schema. [Status: Completed]
 7.  **diag_clang_flag**: Add -fgraded-optics={diag,hybrid,cap} flag plumbing and module markers.
 8.  **diag_intrinsics_or_abi**: Define llvm.go.* intrinsics or stable runtime call ABI.
 9.  **diag_runtime_skeleton**: Implement libgoirrt (diag tier): checks, traps, minimal alloc wrappers, trace hooks.
