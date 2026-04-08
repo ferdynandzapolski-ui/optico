@@ -102,3 +102,39 @@ bool is_alnum(char c) {
         is_digit(c)
     }
 }
+
+bool is_space(char c) {
+    if (c == ' ') {
+        true
+    } else {
+        if (c == '\n') {
+            true
+        } else {
+            if (c == '\r') {
+                true
+            } else {
+                c == '\t'
+            }
+        }
+    }
+}
+
+bool is_hex_digit(char c) {
+    if (is_digit(c)) {
+        true
+    } else {
+        if (c >= 'a') {
+            if (c <= 'f') {
+                true
+            } else {
+                false
+            }
+        } else {
+            if (c >= 'A') {
+                c <= 'F'
+            } else {
+                false
+            }
+        }
+    }
+}

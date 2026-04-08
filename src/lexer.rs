@@ -124,9 +124,24 @@ impl<'a> Lexer<'a> {
                 }
             }
             '\'' => {
-                let val = self.advance().unwrap();
-                self.advance(); // skip '
-                Token::CharLit(val)
+                let val = self.advance().expect("Expected character after '");
+                let result = if val == '\\' {
+                    let escaped = self.advance().expect("Expected escape character after \\");
+                    match escaped {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\\' => '\\',
+                        '\'' => '\'',
+                        _ => escaped,
+                    }
+                } else {
+                    val
+                };
+                if self.peek() == Some('\'') {
+                    self.advance(); // skip closing '
+                }
+                Token::CharLit(result)
             }
             _ if c.is_ascii_digit() => {
                 let mut s = c.to_string();

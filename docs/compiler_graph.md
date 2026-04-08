@@ -24,6 +24,7 @@ protocol NodeSession {
     state Typed {
         optic IR* lower;         // Transitions Typed -> Lowered
     }
+    state Lowered {}
 }
 ```
 

@@ -1,4 +1,4 @@
-// std/compiler/lexer.oco - Lexer for self-hosted OptiCo compiler
+// std/compiler/lexer.oco - Lexer for self-hosted OptiCo v0.3 compiler
 
 struct Token {
     int tag;
@@ -9,6 +9,7 @@ struct Token {
 struct Lexer {
     String input;
     int pos;
+    int line;
 }
 
 char lexer_peek(Lexer l) {
@@ -25,6 +26,9 @@ char lexer_advance(Lexer l) {
         if (l.pos < l.input.len) {
             l.pos := l.pos + 1;
         }
+        if (c == '\n') {
+            l.line := l.line + 1;
+        } else { 0 };
         c
     }
 }
@@ -32,13 +36,32 @@ char lexer_advance(Lexer l) {
 void lexer_skip_whitespace(Lexer l) {
     {
         char c = lexer_peek(l);
-        if (c == ' ') {
+        if (is_space(c)) {
             {
                 lexer_advance(l);
                 lexer_skip_whitespace(l);
             }
         } else {
+            if (c == '/') {
+                {
+                    lexer_advance(l);
+                    if (lexer_peek(l) == '/') {
+                        lexer_skip_comment(l);
+                    } else { 0 };
+                    lexer_skip_whitespace(l);
+                }
+            } else { 0 }
+        }
+    }
+}
+
+void lexer_skip_comment(Lexer l) {
+    {
+        char c = lexer_advance(l);
+        if (c == '\n') {
             0
+        } else {
+            lexer_skip_comment(l);
         }
     }
 }
@@ -46,19 +69,80 @@ void lexer_skip_whitespace(Lexer l) {
 Token lexer_next_token(Lexer l) {
     {
         lexer_skip_whitespace(l);
+        int start_pos = l.pos;
         char c = lexer_advance(l);
         if (l.pos > l.input.len) {
-            alloc<Token>(0, alloc<String>(0, alloc<char, Normal>(1)), 0)
+            alloc<Token>(0, alloc<String>(0, alloc<char, Normal>(0)), l.line)
         } else {
-            if (is_digit(c)) {
-                alloc<Token>(10, alloc<String>(1, alloc<char, Normal>(1)), 0)
-            } else {
-                if (is_alpha(c)) {
-                    alloc<Token>(11, alloc<String>(1, alloc<char, Normal>(1)), 0)
+            if (c == '{') { alloc<Token>(1, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '}') { alloc<Token>(2, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '(') { alloc<Token>(3, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == ')') { alloc<Token>(4, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '[') { alloc<Token>(5, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == ']') { alloc<Token>(6, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == ';') { alloc<Token>(7, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == ',') { alloc<Token>(8, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '.') { alloc<Token>(9, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '*') { alloc<Token>(10, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '+') { alloc<Token>(11, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '-') {
+                if (lexer_peek(l) == '>') {
+                    { lexer_advance(l); alloc<Token>(12, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
                 } else {
-                    alloc<Token>(1, alloc<String>(1, alloc<char, Normal>(1)), 0)
+                    alloc<Token>(13, alloc<String>(1, alloc<char, Normal>(1)), l.line)
                 }
+            } else {
+            if (c == ':') {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); alloc<Token>(14, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
+                } else {
+                    alloc<Token>(15, alloc<String>(1, alloc<char, Normal>(1)), l.line)
+                }
+            } else {
+            if (c == '|') { alloc<Token>(16, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
+            if (c == '=') {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); alloc<Token>(17, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
+                } else {
+                    alloc<Token>(18, alloc<String>(1, alloc<char, Normal>(1)), l.line)
+                }
+            } else {
+            if (is_digit(c)) {
+                lexer_lex_number(l, start_pos)
+            } else {
+            if (is_alpha(c)) {
+                lexer_lex_ident(l, start_pos)
+            } else {
+                alloc<Token>(99, alloc<String>(1, alloc<char, Normal>(1)), l.line) // Error
+            }}}}}}}}}}}}}}}}}
+        }
+    }
+}
+
+Token lexer_lex_number(Lexer l, int start) {
+    {
+        char c = lexer_peek(l);
+        if (is_digit(c)) {
+            {
+                lexer_advance(l);
+                lexer_lex_number(l, start);
             }
+        } else {
+            alloc<Token>(20, alloc<String>(l.pos - start, alloc<char, Normal>(l.pos - start)), l.line)
+        }
+    }
+}
+
+Token lexer_lex_ident(Lexer l, int start) {
+    {
+        char c = lexer_peek(l);
+        if (is_alnum(c)) {
+            {
+                lexer_advance(l);
+                lexer_lex_ident(l, start);
+            }
+        } else {
+            alloc<Token>(21, alloc<String>(l.pos - start, alloc<char, Normal>(l.pos - start)), l.line)
         }
     }
 }

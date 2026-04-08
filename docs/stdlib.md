@@ -25,6 +25,16 @@ The I/O module handles interaction with the system.
 ### Functions
 - `void print_int(int val)`: Outputs an integer to the console.
 - `void print_char(char val)`: Outputs a character to the console.
+- `String string_concat(String s1, String s2)`: Concatenates two strings.
+
+## Collections
+### PtrVector (`std/ptr_vector.oco`)
+- `PtrVector ptr_vector_new(int cap)`: Creates a new pointer vector with initial capacity.
+- `void ptr_vector_push(PtrVector v, pointer<Unit, Heap> val)`: Pushes a pointer onto the vector, resizing if necessary.
+
+### Vector (`std/vector.oco`)
+- `Vector vector_new(int cap)`: Creates a new integer vector.
+- `void vector_push(Vector v, int val)`: Pushes an integer onto the vector, resizing if necessary.
 
 ## Compiler IR Components (`std/ir/`)
 To support the graph-based IR model, the library provides standard structures and protocols for compiler phases.
