@@ -1,0 +1,26 @@
+@LLVM_LIT_CONFIG_MAP@
+
+import os
+import sys
+
+config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
+config.llvm_libs_dir = "@LLVM_LIBS_DIR@"
+config.goir_passes_dir = "@CMAKE_BINARY_DIR@/passes"
+
+# Support substitution of the tools and libs dirs with user parameters. This is
+# used when we can't determine the tool dir at configuration time.
+try:
+    config.llvm_tools_dir = config.llvm_tools_dir % lit_config.params
+    config.llvm_libs_dir = config.llvm_libs_dir % lit_config.params
+except KeyError:
+    e = sys.exc_info()[1]
+    key, = e.args
+    lit_config.fatal("unable to find %r parameter, use '--param=%s=VALUE'" % (key, key))
+
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
+
+config.environment['PATH'] = os.path.pathsep.join([config.llvm_tools_dir, config.environment.get('PATH', '')])
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@MAIN_CONFIG@")
