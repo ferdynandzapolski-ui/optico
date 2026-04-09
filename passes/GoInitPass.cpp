@@ -1,6 +1,4 @@
-#include "llvm/Pass.h"
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/PassPlugin.h"
+#include "GoInitPass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/IR/Module.h"
@@ -14,14 +12,9 @@ using namespace llvm;
 static cl::opt<int> GoTier("go-tier", cl::init(0),
   cl::desc("GOIR enforcement tier (0: diag, 1: hybrid, 2: cap)"));
 
-namespace {
+namespace llvm {
 
-struct GoInitPass : public PassInfoMixin<GoInitPass> {
-  Type *GradeTy = nullptr;
-  FunctionCallee GradeFromAllocaFn = nullptr;
-  FunctionCallee GradeFromMallocFn = nullptr;
-
-  void ensureTypes(Module &M) {
+  void GoInitPass::ensureTypes(Module &M) {
     if (GradeTy) return;
 
     LLVMContext &Ctx = M.getContext();
@@ -43,13 +36,13 @@ struct GoInitPass : public PassInfoMixin<GoInitPass> {
     GradeFromMallocFn = M.getOrInsertFunction("llvm.go.grade_from_malloc", GradeTy, PtrTy, SizeTy);
   }
 
-  void emitRemark(Instruction *I, StringRef Message) {
+  void GoInitPass::emitRemark(Instruction *I, StringRef Message) {
     LLVMContext &Ctx = I->getContext();
     Ctx.diagnose(OptimizationRemark(
         "go-init", "Remark", I->getDebugLoc(), I->getParent()) << Message);
   }
 
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
+  PreservedAnalyses GoInitPass::run(Module &M, ModuleAnalysisManager &AM) {
     errs() << "GoInitPass running on module: " << M.getName() << " with tier " << GoTier << "\n";
 
     M.addModuleFlag(Module::Error, "go-tier", GoTier);
@@ -123,21 +116,4 @@ struct GoInitPass : public PassInfoMixin<GoInitPass> {
 
     return PreservedAnalyses::none();
   }
-};
-} // end anonymous namespace
-
-extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "GoInitPass", LLVM_VERSION_STRING,
-          [](PassBuilder &PB) {
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, ModulePassManager &MPM,
-                   ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "go-init") {
-                    MPM.addPass(GoInitPass());
-                    return true;
-                  }
-                  return false;
-                });
-          }};
-}
+} // namespace llvm
