@@ -8,14 +8,15 @@ llvm_canonicalize_cmake_booleans(
   LLVM_LINK_LLVM_DYLIB
 )
 
-set(MAIN_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/lit.cfg.py")
+# Configure LLVM tests
+set(MAIN_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/llvm/lit.cfg.py")
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
-  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py
+  ${CMAKE_CURRENT_BINARY_DIR}/llvm/lit.site.cfg.py
 )
 
 add_custom_target(check-goir
-  COMMAND lit ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND lit ${CMAKE_CURRENT_BINARY_DIR}/llvm
   DEPENDS GOIRPasses goirrt
   COMMENT "Running GOIR regression tests"
   USES_TERMINAL
