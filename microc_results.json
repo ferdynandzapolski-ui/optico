@@ -10,14 +10,14 @@
     "name": "bounds_array_index.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing arr[10]...\nValue: 1423286730\n",
+    "stdout": "Accessing arr[10]...\nValue: 884191690\n",
     "stderr": ""
   },
   {
     "name": "bounds_basic_oob_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Reading arr[5] (OOB)...\nValue: 32767\n",
+    "stdout": "Reading arr[5] (OOB)...\nValue: 32766\n",
     "stderr": ""
   },
   {
@@ -52,7 +52,7 @@
     "name": "bounds_negative_index.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing p[-1]...\nValue: 32765\n",
+    "stdout": "Accessing p[-1]...\nValue: 32766\n",
     "stderr": ""
   },
   {
@@ -66,7 +66,7 @@
     "name": "bounds_one_past_end.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Pointer at one-past-the-end: 0x7ffe50b85fb4\nAttempting to dereference one-past-the-end...\nValue: 32766\n",
+    "stdout": "Pointer at one-past-the-end: 0x7fff39406d64\nAttempting to dereference one-past-the-end...\nValue: 32767\n",
     "stderr": ""
   },
   {
@@ -101,7 +101,7 @@
     "name": "lifetime_realloc_uaf.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Original p: 0x55d6590df2a0\nNew q: 0x55d6590e02e0\nAccessing old p after realloc (UAF)...\nValue: 1566937311\n",
+    "stdout": "Original p: 0x556a3f0e32a0\nNew q: 0x556a3f0e42e0\nAccessing old p after realloc (UAF)...\nValue: 1453584611\n",
     "stderr": ""
   },
   {
@@ -122,14 +122,14 @@
     "name": "lifetime_stack_escape.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing stack pointer after function return...\nValue: 32522\n",
+    "stdout": "Accessing stack pointer after function return...\nValue: 32712\n",
     "stderr": ""
   },
   {
     "name": "lifetime_uaf_alias.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1537970019\n",
+    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1607565625\n",
     "stderr": ""
   },
   {
@@ -143,7 +143,7 @@
     "name": "lifetime_uaf_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing p after free (UAF)...\nValue: 1669539605\n",
+    "stdout": "Accessing p after free (UAF)...\nValue: 1582041307\n",
     "stderr": ""
   },
   {
@@ -220,7 +220,7 @@
     "name": "prov_ptr_int_roundtrip.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Roundtrip p -> i -> q: 0x7fff771284f8 == 0x7fff771284f8\nSuccess\n",
+    "stdout": "Roundtrip p -> i -> q: 0x7ffde4c59458 == 0x7ffde4c59458\nSuccess\n",
     "stderr": ""
   },
   {
@@ -229,5 +229,12 @@
     "exit_code": 0,
     "stdout": "Struct passed: p.x=10, p.y=20\n",
     "stderr": ""
+  },
+  {
+    "name": "trace_smoke.c",
+    "status": "PASS",
+    "exit_code": 0,
+    "stdout": "Allocated at 0x55a2799962a0\n",
+    "stderr": "GOIR check load: 0x55a2799962a0 (size: 4)\nGOIR check load: 0x55a2799962c8 (size: 4)\nGOIR check free: 0x55a2799962a0\n"
   }
 ]
