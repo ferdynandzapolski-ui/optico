@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# goir-clang: A wrapper for clang-18 to support -fgraded-optics
+
+# Determine paths
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PASS_PLUGIN="$REPO_ROOT/build/passes/GOIRPasses.so"
+RUNTIME_DIR="$REPO_ROOT/build/runtime"
+
+NEW_ARGS=()
+GRADED_OPTICS_TIER=""
+
+# Process arguments
+for arg in "$@"; do
+    if [[ "$arg" == -fgraded-optics=* ]]; then
+        TIER="${arg#*=}"
+        case "$TIER" in
+            diag)   GRADED_OPTICS_TIER="0" ;;
+            hybrid) GRADED_OPTICS_TIER="1" ;;
+            cap)    GRADED_OPTICS_TIER="2" ;;
+            *)      echo "Error: Unknown GOIR tier '$TIER'"; exit 1 ;;
+        esac
+    else
+        NEW_ARGS+=("$arg")
+    fi
+done
+
+# If -fgraded-optics was specified, inject the pass and runtime
+if [[ -n "$GRADED_OPTICS_TIER" ]]; then
+    if [[ ! -f "$PASS_PLUGIN" ]]; then
+        echo "Error: GOIR pass plugin not found at $PASS_PLUGIN. Please build it first."
+        exit 1
+    fi
+    # Inject the pass plugin and its configuration via environment variable
+    # Clang's -mllvm has issues with plugin-defined options in some environments.
+    export GOIR_TIER="$GRADED_OPTICS_TIER"
+    NEW_ARGS+=("-fpass-plugin=$PASS_PLUGIN")
+
+    # Inject the runtime library
+    NEW_ARGS+=("-L$RUNTIME_DIR" "-lgoirrt" "-Wl,-rpath,$RUNTIME_DIR")
+fi
+
+# Call clang-18 with the updated arguments
+exec clang-18 "${NEW_ARGS[@]}"

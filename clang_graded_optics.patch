@@ -1,0 +1,30 @@
+Index: clang/lib/Driver/Driver.cpp
+===================================================================
+--- clang/lib/Driver/Driver.cpp
++++ clang/lib/Driver/Driver.cpp
+@@ -1234,6 +1234,18 @@
+   if (Args.hasArg(options::OPT_fgraded_optics_EQ)) {
+     StringRef Tier = Args.getLastArgValue(options::OPT_fgraded_optics_EQ);
+     CmdArgs.push_back("-mllvm");
+-    CmdArgs.push_back(Args.MakeArgString("-go-tier=" + Tier));
++    if (Tier == "diag")
++      CmdArgs.push_back("-go-tier=0");
++    else if (Tier == "hybrid")
++      CmdArgs.push_back("-go-tier=1");
++    else if (Tier == "cap")
++      CmdArgs.push_back("-go-tier=2");
++
++    // Injection of pass plugin and runtime library linkage logic would go here
++    // as part of the driver's job to coordinate frontend and linker.
+   }
+
+Index: clang/include/clang/Driver/Options.td
+===================================================================
+--- clang/include/clang/Driver/Options.td
++++ clang/include/clang/Driver/Options.td
+@@ -3456,6 +3456,8 @@
+   HelpText<"Enable GOIR graded optics enforcement tiers">,
+   Values<"diag,hybrid,cap">,
+   Group<f_Group>;
++def fgraded_optics_EQ : Joined<["-"], "fgraded-optics=">,
++  Flags<[CC1Option, CoreOption]>, Alias<fgraded_optics>;

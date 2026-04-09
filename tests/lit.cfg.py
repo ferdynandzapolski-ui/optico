@@ -7,3 +7,4 @@ config.suffixes = ['.ll', '.c']
 config.test_source_root = os.path.dirname(__file__)
 
 config.substitutions.append(('%opt', 'opt -load-pass-plugin=' + config.goir_passes_dir + '/GOIRPasses.so'))
+config.substitutions.append(('%goir-clang', os.path.join(config.test_source_root, '..', 'tools', 'goir-clang')))
