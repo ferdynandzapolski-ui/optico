@@ -77,7 +77,8 @@ namespace llvm {
               emitRemark(AI, "Unknown alloca size; using TOP grade");
             }
 
-            Builder.CreateCall(GradeFromAllocaFn, {AI, Size}, "g_p");
+            Value *G_p = Builder.CreateCall(GradeFromAllocaFn, {AI, Size}, "g_p");
+            AI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
           } else if (auto *CI = dyn_cast<CallInst>(&I)) {
             Function *CalledFn = CI->getCalledFunction();
             if (!CalledFn) continue;
@@ -89,7 +90,8 @@ namespace llvm {
                 Builder.SetInsertPoint(&BB);
 
               Value *Size = CI->getArgOperand(0);
-              Builder.CreateCall(GradeFromMallocFn, {CI, Size}, "g_p");
+              Value *G_p = Builder.CreateCall(GradeFromMallocFn, {CI, Size}, "g_p");
+              CI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
             } else if (CalledFn->getName() == "calloc") {
               if (auto *Next = CI->getNextNode())
                 Builder.SetInsertPoint(Next);
@@ -99,7 +101,8 @@ namespace llvm {
               Value *NMemb = CI->getArgOperand(0);
               Value *Size = CI->getArgOperand(1);
               Value *TotalSize = Builder.CreateMul(NMemb, Size);
-              Builder.CreateCall(GradeFromMallocFn, {CI, TotalSize}, "g_p");
+              Value *G_p = Builder.CreateCall(GradeFromMallocFn, {CI, TotalSize}, "g_p");
+              CI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
             } else if (CalledFn->getName() == "realloc") {
               if (auto *Next = CI->getNextNode())
                 Builder.SetInsertPoint(Next);
@@ -107,7 +110,8 @@ namespace llvm {
                 Builder.SetInsertPoint(&BB);
 
               Value *Size = CI->getArgOperand(1);
-              Builder.CreateCall(GradeFromMallocFn, {CI, Size}, "g_p");
+              Value *G_p = Builder.CreateCall(GradeFromMallocFn, {CI, Size}, "g_p");
+              CI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
             }
           }
         }

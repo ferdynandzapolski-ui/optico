@@ -59,10 +59,12 @@ namespace llvm {
         for (Function &F : M) {
             GradeMap.clear();
 
-            // Collect existing grades from allocation sites
+            // Collect existing grades from allocation sites and metadata
             for (auto &BB : F) {
                 for (auto &I : BB) {
-                    if (auto *CI = dyn_cast<CallInst>(&I)) {
+                    if (auto *MD = I.getMetadata("go.grade")) {
+                        GradeMap[&I] = cast<ValueAsMetadata>(MD->getOperand(0))->getValue();
+                    } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                         Function *Callee = CI->getCalledFunction();
                         if (Callee && (Callee->getName() == "llvm.go.grade_from_alloca" ||
                                        Callee->getName() == "llvm.go.grade_from_malloc")) {
@@ -100,25 +102,33 @@ namespace llvm {
 
                                 if (GEP->accumulateConstantOffset(DL, Offset)) {
                                     OffsetVal = ConstantInt::get(Type::getInt64Ty(M.getContext()), Offset.getSExtValue());
-                                    GradeMap[GEP] = Builder.CreateCall(GepGradeFn, {G_p, OffsetVal, ConstantInt::get(Type::getInt64Ty(M.getContext()), 1)}, "g_q");
+                                    Value *G_q = Builder.CreateCall(GepGradeFn, {G_p, OffsetVal, ConstantInt::get(Type::getInt64Ty(M.getContext()), 1)}, "g_q");
+                                    GEP->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_q)));
+                                    GradeMap[GEP] = G_q;
                                     Changed = true;
                                 } else {
                                     // Dynamic GEP fallback to TOP for now
                                     emitRemark(GEP, "Dynamic GEP; degrading to TOP grade");
-                                    GradeMap[GEP] = getTOP(M, Builder);
+                                    Value *G_top = getTOP(M, Builder);
+                                    GEP->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_top)));
+                                    GradeMap[GEP] = G_top;
                                     Changed = true;
                                 }
                             }
                         } else if (auto *BC = dyn_cast<BitCastInst>(&I)) {
                             Value *Ptr = BC->getOperand(0);
                             if (GradeMap.count(Ptr)) {
-                                GradeMap[BC] = GradeMap[Ptr];
+                                Value *G_p = GradeMap[Ptr];
+                                BC->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
+                                GradeMap[BC] = G_p;
                                 Changed = true;
                             }
                         } else if (auto *ASC = dyn_cast<AddrSpaceCastInst>(&I)) {
                             Value *Ptr = ASC->getOperand(0);
                             if (GradeMap.count(Ptr)) {
-                                GradeMap[ASC] = GradeMap[Ptr];
+                                Value *G_p = GradeMap[Ptr];
+                                ASC->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_p)));
+                                GradeMap[ASC] = G_p;
                                 Changed = true;
                             }
                         } else if (auto *PN = dyn_cast<PHINode>(&I)) {
@@ -138,6 +148,7 @@ namespace llvm {
                                 for (size_t i = 1; i < IncomingGrades.size(); ++i) {
                                     G_res = Builder.CreateCall(JoinGradeFn, {G_res, IncomingGrades[i]}, "g_phi");
                                 }
+                                PN->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_res)));
                                 GradeMap[PN] = G_res;
                                 Changed = true;
                             }
@@ -145,13 +156,17 @@ namespace llvm {
                             Value *T = SI->getTrueValue();
                             Value *F = SI->getFalseValue();
                             if (GradeMap.count(T) && GradeMap.count(F)) {
-                                GradeMap[SI] = Builder.CreateCall(JoinGradeFn, {GradeMap[T], GradeMap[F]}, "g_sel");
+                                Value *G_sel = Builder.CreateCall(JoinGradeFn, {GradeMap[T], GradeMap[F]}, "g_sel");
+                                SI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_sel)));
+                                GradeMap[SI] = G_sel;
                                 Changed = true;
                             }
                         } else {
                             // Unhandled pointer-producing opcode => TOP + remark
                             emitRemark(&I, "Unhandled pointer opcode; degrading to TOP grade");
-                            GradeMap[&I] = getTOP(M, Builder);
+                            Value *G_top = getTOP(M, Builder);
+                            I.setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G_top)));
+                            GradeMap[&I] = G_top;
                             Changed = true;
                         }
                     }
