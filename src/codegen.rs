@@ -29,6 +29,7 @@ impl CodeGenerator {
                 s.push_str(&format!("{})", pad));
                 s
             }
+            CIROp::ConstString(s) => format!("{}\"{}\"", pad, s),
             CIROp::Free(e) => format!("{}free (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
             CIROp::Fetch(fp) => format!("{}fetch {:?}", pad, fp),
             CIROp::Persist(v, dur) => format!("{}persist (\n{}{},\n{}  {:?})", pad, Self::gen_op(v, indent + 1), pad, pad, dur),

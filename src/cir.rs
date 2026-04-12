@@ -15,6 +15,7 @@ pub enum CIROp {
     Next(Box<CIROp>, Option<String>),
     Prev(Box<CIROp>, Option<String>),
     Call(String, Vec<CIROp>),
+    ConstString(String),
     Spawn(Box<CIROp>),
     Block(Vec<CIROp>),
     StructDecl(String, Vec<(String, Type)>), // RFC 001
@@ -82,6 +83,7 @@ impl CIRLowerer {
                 }
             }
             Expr::Assign(n, e) => CIROp::Store(n.clone(), Box::new(Self::lower_expr(e))),
+            Expr::ConstString(s) => CIROp::ConstString(s.clone()),
             _ => CIROp::Block(vec![]),
         }
     }

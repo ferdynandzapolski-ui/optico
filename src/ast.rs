@@ -31,6 +31,7 @@ pub enum Expr {
     ConstFloat(f64),
     ConstBool(bool),
     ConstChar(char),
+    ConstString(String),
     Access(Box<Expr>, String), // e.l
     Call(Box<Expr>, Vec<Expr>), // e1(e2, ...)
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>), // if (e1) e2 [else e3]

@@ -81,17 +81,17 @@ impl<'a> Parser<'a> {
         if self.current_token == Token::Extern {
             self.advance();
             match &self.current_token {
-                Token::IntLit(_) | Token::FloatLit(_) | Token::BoolLit(_) | Token::CharLit(_) | Token::Ident(_) => {
-                    // Check for "C"
-                    if let Token::Ident(n) = &self.current_token {
-                        if n != "C" {
-                            panic!("Expected \"C\" after extern, found {}", n);
-                        }
-                    } else {
-                        panic!("Expected \"C\" after extern");
+                Token::StringLit(n) => {
+                    if n != "C" {
+                        panic!("Expected \"C\" after extern, found {}", n);
                     }
                 }
-                _ => panic!("Expected \"C\" after extern"),
+                Token::Ident(n) => {
+                    if n != "C" {
+                        panic!("Expected \"C\" after extern, found {}", n);
+                    }
+                }
+                _ => panic!("Expected \"C\" after extern, found {:?}", self.current_token),
             }
             self.advance();
             self.expect(Token::LBrace);
@@ -591,7 +591,12 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Expr::ConstChar(val)
             }
-            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct | Token::Later => {
+            Token::StringLit(s) => {
+                let val = s.clone();
+                self.advance();
+                Expr::ConstString(val)
+            }
+            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct | Token::Later | Token::Pointer => {
                 let _ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
@@ -610,7 +615,7 @@ impl<'a> Parser<'a> {
                 let mut lex_copy = self.lexer.clone();
                 let next = lex_copy.next_token();
                 let is_decl = match next {
-                    Token::Ident(_) | Token::Star | Token::Lt => {
+                    Token::Ident(_) | Token::Star => {
                         // Check if it's not actually an expression like a < b or x * y
                         let mut next_lex = lex_copy.clone();
                         let after_next = next_lex.next_token();

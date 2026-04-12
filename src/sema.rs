@@ -294,6 +294,7 @@ impl Sema {
             Expr::ConstFloat(_) => Type::Float,
             Expr::ConstBool(_) => Type::Bool,
             Expr::ConstChar(_) => Type::Char,
+            Expr::ConstString(_) => Type::Named("String".to_string()),
             Expr::Next(e, clock) => {
                 let added = self.guarded.insert(clock.clone());
                 let ty = self.check_expr(e, env, res_consumed, local_resources);

@@ -26,6 +26,8 @@ The I/O module handles interaction with the system.
 - `void print_int(int val)`: Outputs an integer to the console.
 - `void print_char(char val)`: Outputs a character to the console.
 - `String string_concat(String s1, String s2)`: Concatenates two strings.
+- `int string_find_char(String s, char c)`: Returns the index of the first occurrence of `c` in `s`, or -1 if not found.
+- `String string_substring(String s, int start, int len)`: Returns a new string containing the characters from `s` starting at `start` with length `len`.
 
 ## Collections
 ### PtrVector (`std/ptr_vector.oco`)
@@ -45,9 +47,9 @@ To support the graph-based IR model, the library provides standard structures an
 - `state Resolved { optic Type* typecheck; }`: Focuses on type analysis to reach the `Typed` state.
 
 ### Structs
-- `struct Node { int id; SourceLoc loc; }`: The base carrier for AST information.
-- `struct Symbol { string name; int scope_id; }`: Represents a resolved symbol.
-- `struct Type { string kind; int size; }`: Represents a verified type.
+- `struct Node { int id; int kind; String lexeme; PtrVector children; }`: The base carrier for AST information.
+- `struct Symbol { String name; int scope_id; pointer<Unit, Heap> node_ref; }`: Represents a resolved symbol.
+- `struct TypeIR { String kind; int size; PtrVector params; }`: Represents a verified type.
 
 ## Interoperability Support (`std/interop.oco`)
 Supports legacy C integration through Pointer Lifting and `C_context`.

@@ -20,6 +20,34 @@ bool string_equal(String s1, String s2) {
     }
 }
 
+int string_find_char(String s, char c) {
+    string_find_char_rec(s.data, s.len, c, 0)
+}
+
+int string_find_char_rec(pointer<char, Heap> d, int len, char c, int i) {
+    if (i == len) {
+        0 - 1
+    } else {
+        if (d[i] == c) {
+            i
+        } else {
+            string_find_char_rec(d, len, c, i + 1)
+        }
+    }
+}
+
+String string_substring(String s, int start, int len) {
+    if (start + len > s.len) {
+        alloc<String>(0, alloc<char, Normal>(0))
+    } else {
+        {
+            pointer<char, Normal> new_data = alloc<char, Normal>(len);
+            string_copy_rec(new_data, s.data + start, len, 0, 0);
+            alloc<String>(len, new_data)
+        }
+    }
+}
+
 String string_concat(String s1, String s2) {
     {
         int new_len = s1.len + s2.len;

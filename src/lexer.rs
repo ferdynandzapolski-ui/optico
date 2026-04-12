@@ -10,6 +10,7 @@ pub enum Token {
     FloatLit(f64),
     BoolLit(bool),
     CharLit(char),
+    StringLit(String),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
     Bang, Plus, Minus, Slash,
@@ -122,6 +123,34 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Gt
                 }
+            }
+            '"' => {
+                let mut s = String::new();
+                while let Some(c) = self.peek() {
+                    if c == '"' {
+                        self.advance();
+                        return Token::StringLit(s);
+                    }
+                    if c == '\\' {
+                        self.advance();
+                        if let Some(escaped) = self.advance() {
+                            match escaped {
+                                'n' => s.push('\n'),
+                                'r' => s.push('\r'),
+                                't' => s.push('\t'),
+                                '\\' => s.push('\\'),
+                                '"' => s.push('"'),
+                                _ => s.push(escaped),
+                            }
+                        } else {
+                            // Unterminated escape sequence
+                            break;
+                        }
+                    } else {
+                        s.push(self.advance().unwrap());
+                    }
+                }
+                Token::StringLit(s) // Fallback for unterminated string
             }
             '\'' => {
                 let val = self.advance().expect("Expected character after '");

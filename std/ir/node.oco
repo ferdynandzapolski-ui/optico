@@ -13,10 +13,25 @@ protocol NodeSession {
         optic Symbol* resolve;   // Transitions Parsed -> Resolved
     }
     state Resolved {
-        optic Type* typecheck;   // Transitions Resolved -> Typed
+        optic TypeIR* typecheck;   // Transitions Resolved -> Typed
     }
     state Typed {
         optic IR* lower;         // Transitions Typed -> Lowered
     }
     state Lowered {}
+}
+
+Symbol* resolve_node(Node* n) {
+    // placeholder
+    alloc<Symbol>(alloc<String>(0, alloc<char, Normal>(0)), 0, n)
+}
+
+TypeIR* typecheck_node(Node* n) {
+    // placeholder
+    alloc<TypeIR>(alloc<String>(0, alloc<char, Normal>(0)), 0, ptr_vector_new(0))
+}
+
+IR* lower_node(Node* n) {
+    // placeholder
+    alloc<IR>(0, 0, ptr_vector_new(0))
 }
