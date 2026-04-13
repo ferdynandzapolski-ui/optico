@@ -81,17 +81,17 @@ impl<'a> Parser<'a> {
         if self.current_token == Token::Extern {
             self.advance();
             match &self.current_token {
-                Token::IntLit(_) | Token::FloatLit(_) | Token::BoolLit(_) | Token::CharLit(_) | Token::Ident(_) => {
-                    // Check for "C"
-                    if let Token::Ident(n) = &self.current_token {
-                        if n != "C" {
-                            panic!("Expected \"C\" after extern, found {}", n);
-                        }
-                    } else {
-                        panic!("Expected \"C\" after extern");
+                Token::StringLit(n) => {
+                    if n != "C" {
+                        panic!("Expected \"C\" after extern, found {}", n);
                     }
                 }
-                _ => panic!("Expected \"C\" after extern"),
+                Token::Ident(n) => {
+                    if n != "C" {
+                        panic!("Expected \"C\" after extern, found {}", n);
+                    }
+                }
+                _ => panic!("Expected \"C\" after extern, found {:?}", self.current_token),
             }
             self.advance();
             self.expect(Token::LBrace);
@@ -186,7 +186,41 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type(&mut self) -> Type {
-        let mut ty = match &self.current_token {
+        let mut ty = self.parse_base_type();
+
+        while self.current_token == Token::Star {
+            self.advance();
+            ty = Type::Optic(Box::new(ty), None, None);
+        }
+
+        if self.current_token == Token::At {
+            self.advance();
+            match &self.current_token {
+                Token::IntLit(_) | Token::FloatLit(_) => {
+                    let conf = match &self.current_token {
+                        Token::IntLit(n) => *n as f64,
+                        Token::FloatLit(f) => *f,
+                        _ => unreachable!(),
+                    };
+                    self.advance();
+                    ty = match ty {
+                        Type::Optic(inner, res, _) => Type::Optic(inner, res, Some(conf)),
+                        Type::Traversal(inner, res, _) => Type::Traversal(inner, res, Some(conf)),
+                        Type::RecOptic(inner, res, _) => Type::RecOptic(inner, res, Some(conf)),
+                        Type::AtomicOptic(inner, res, _) => Type::AtomicOptic(inner, res, Some(conf)),
+                        Type::Pointer(inner, ctx, _) => Type::Pointer(inner, ctx, Some(conf)),
+                        _ => panic!("Confidence annotation @ only allowed on optic or pointer types"),
+                    };
+                }
+                _ => panic!("Expected confidence value after @"),
+            }
+        }
+
+        ty
+    }
+
+    fn parse_base_type(&mut self) -> Type {
+        match &self.current_token {
             Token::IntType => { self.advance(); Type::Int }
             Token::FloatType => { self.advance(); Type::Float }
             Token::BoolType => { self.advance(); Type::Bool }
@@ -226,7 +260,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::Optic(Box::new(inner), res_assoc)
+                Type::Optic(Box::new(inner), res_assoc, None)
             }
             Token::Traversal => {
                 self.advance();
@@ -240,7 +274,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::Traversal(Box::new(inner), res_assoc)
+                Type::Traversal(Box::new(inner), res_assoc, None)
             }
             Token::Later => {
                 self.advance();
@@ -268,7 +302,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::RecOptic(Box::new(inner), res_assoc)
+                Type::RecOptic(Box::new(inner), res_assoc, None)
             }
             Token::Atomic => {
                 self.advance();
@@ -283,7 +317,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::AtomicOptic(Box::new(inner), res_assoc)
+                Type::AtomicOptic(Box::new(inner), res_assoc, None)
             }
             Token::Pointer => {
                 self.advance();
@@ -296,7 +330,7 @@ impl<'a> Parser<'a> {
                 };
                 self.advance();
                 self.expect(Token::Gt);
-                Type::Pointer(Box::new(inner), ctx)
+                Type::Pointer(Box::new(inner), ctx, None)
             }
             Token::Ident(n) => {
                 let mut dur = None;
@@ -344,14 +378,7 @@ impl<'a> Parser<'a> {
             Token::Free => { self.advance(); Type::Named("free".to_string()) }
             Token::Alloc => { self.advance(); Type::Named("alloc".to_string()) }
             _ => panic!("Unexpected token in type: {:?}", self.current_token),
-        };
-
-        while self.current_token == Token::Star {
-            self.advance();
-            ty = Type::Optic(Box::new(ty), None);
         }
-
-        ty
     }
 
     fn parse_expr(&mut self) -> Expr {
@@ -509,11 +536,7 @@ impl<'a> Parser<'a> {
             Token::Alloc => {
                 self.advance();
                 self.expect(Token::Lt);
-                let mut _ty = self.parse_type();
-                while self.current_token == Token::Star {
-                    self.advance();
-                    _ty = Type::Optic(Box::new(_ty), None);
-                }
+                let _ty = self.parse_type();
                 let mut dur = None;
                 if self.current_token == Token::Comma {
                     self.advance();
@@ -591,18 +614,32 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Expr::ConstChar(val)
             }
-            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct | Token::Later => {
-                let _ty = self.parse_type();
-                let name = match &self.current_token {
-                    Token::Ident(n) => n.clone(),
-                    _ => panic!("Expected identifier after type in expr, found {:?}", self.current_token),
-                };
+            Token::StringLit(s) => {
+                let val = s.clone();
                 self.advance();
-                if self.current_token == Token::Assign {
-                    self.advance();
-                    Expr::Assign(name, Box::new(self.parse_expr()))
-                } else {
-                    Expr::Var(name)
+                Expr::ConstString(val)
+            }
+            Token::Co | Token::IntType | Token::FloatType | Token::BoolType | Token::CharType | Token::VoidType | Token::Optic | Token::Traversal | Token::Rec | Token::Atomic | Token::Struct | Token::Later | Token::Pointer => {
+                let ty = self.parse_type();
+                match &self.current_token {
+                    Token::Ident(name) => {
+                        let name = name.clone();
+                        self.advance();
+                        if self.current_token == Token::Assign {
+                            self.advance();
+                            let val = self.parse_expr();
+                            Expr::LocalDecl(name, ty, Box::new(val))
+                        } else {
+                            Expr::Var(name)
+                        }
+                    }
+                    _ => {
+                        // If it's just a type without an identifier, it might be an expression
+                        // (though OptiCo v0.3 doesn't have many such things, maybe casts or similar in future)
+                        // For now, if we parsed a type and don't see an ident, it's likely an error in this context
+                        // unless it's something like pointer<...>(args) - but that should be handled by specific exprs.
+                        panic!("Expected identifier after type in expr, found {:?}", self.current_token);
+                    }
                 }
             }
             Token::Ident(n) => {
@@ -610,12 +647,12 @@ impl<'a> Parser<'a> {
                 let mut lex_copy = self.lexer.clone();
                 let next = lex_copy.next_token();
                 let is_decl = match next {
-                    Token::Ident(_) | Token::Star | Token::Lt => {
+                    Token::Ident(_) | Token::Star | Token::At => {
                         // Check if it's not actually an expression like a < b or x * y
                         let mut next_lex = lex_copy.clone();
                         let after_next = next_lex.next_token();
                         match after_next {
-                            Token::Assign | Token::Star | Token::Lt | Token::Ident(_) | Token::Comma | Token::Gt | Token::Semi => true,
+                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At => true,
                             _ => false,
                         }
                     }
@@ -721,7 +758,7 @@ mod tests {
             Decl::Global(name, ty, _) => {
                 assert_eq!(name, "buffer");
                 match ty {
-                    Type::Optic(_inner, assoc) => {
+                    Type::Optic(_inner, assoc, _) => {
                         assert_eq!(assoc, &Some("f".to_string()));
                     }
                     _ => panic!("Expected Optic type"),
@@ -762,8 +799,8 @@ mod tests {
         match &prog.decls[0] {
             Decl::Global(_, ty, _) => {
                 match ty {
-                    Type::Traversal(inner, _) => {
-                        assert_eq!(**inner, Type::Optic(Box::new(Type::Int), None));
+                    Type::Traversal(inner, _, _) => {
+                        assert_eq!(**inner, Type::Optic(Box::new(Type::Int), None, None));
                     }
                     _ => panic!("Expected Traversal type"),
                 }

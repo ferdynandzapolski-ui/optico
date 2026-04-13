@@ -18,6 +18,7 @@ fn main() {
     let prog = parser.parse_program();
 
     let mut sema = Sema::new();
+    sema.load_beliefs("beliefs.json");
     sema.check_program(&prog);
 
     let cir = CIRLowerer::lower_program(&prog);
