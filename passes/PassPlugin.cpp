@@ -2,6 +2,9 @@
 #include "llvm/Passes/PassPlugin.h"
 #include "GoInitPass.h"
 #include "GoPropagatePass.h"
+#include "GoCheckInsertPass.h"
+#include "GoMemIntrinsicPass.h"
+#include "GoLowerPass.h"
 
 using namespace llvm;
 
@@ -18,6 +21,18 @@ llvmGetPassPluginInfo() {
                   }
                   if (Name == "go-propagate") {
                     MPM.addPass(GoPropagatePass());
+                    return true;
+                  }
+                  if (Name == "go-check-insert") {
+                    MPM.addPass(GoCheckInsertPass());
+                    return true;
+                  }
+                  if (Name == "go-mem-intrinsic") {
+                    MPM.addPass(GoMemIntrinsicPass());
+                    return true;
+                  }
+                  if (Name == "go-lower") {
+                    MPM.addPass(GoLowerPass());
                     return true;
                   }
                   return false;

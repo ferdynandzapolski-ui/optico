@@ -2,27 +2,31 @@
 #include "go_trace.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static go_site_t dummy_site = {"unknown", 0, "unknown"};
 
+static void go_trap(const char* cause, const char* detail, const void* p, go_grade_t g) {
+    fprintf(stderr, "GOIR TRAP: %s - %s at %p\n", cause, detail, p);
+    __go_trace_event(GO_EVENT_CHECK_FAIL, p, g, cause, detail, dummy_site);
+    abort();
+}
+
 void __go_check_load(const void* p, go_grade_t g, size_t n) {
-    fprintf(stderr, "GOIR check load: %p (size: %zu)\n", p, n);
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
-        __go_trace_event(GO_EVENT_CHECK_FAIL, p, g, "bounds", "OOB load", dummy_site);
+        go_trap("bounds", "OOB load", p, g);
     }
 }
 
 void __go_check_store(void* p, go_grade_t g, size_t n) {
-    fprintf(stderr, "GOIR check store: %p (size: %zu)\n", p, n);
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
-        __go_trace_event(GO_EVENT_CHECK_FAIL, p, g, "bounds", "OOB store", dummy_site);
+        go_trap("bounds", "OOB store", p, g);
     }
 }
 
 void __go_check_free(void* p, go_grade_t g) {
-    fprintf(stderr, "GOIR check free: %p\n", p);
     if ((uint64_t)p != g.base) {
-        __go_trace_event(GO_EVENT_CHECK_FAIL, p, g, "bounds", "invalid free (not base)", dummy_site);
+        go_trap("bounds", "invalid free (not base)", p, g);
     }
 }
 
@@ -33,7 +37,6 @@ void* __go_malloc(size_t n, go_grade_t* out_g) {
         g.base = (uint64_t)p;
         g.end = (uint64_t)p + n;
         g.flags = GO_BOUNDS_KIND_OBJECT;
-        // Other fields initialized to zero/TOP for now
     }
     if (out_g) *out_g = g;
     __go_trace_event(GO_EVENT_INIT, p, g, "none", "malloc", dummy_site);
@@ -58,16 +61,68 @@ void* __go_realloc(void* p, size_t n, go_grade_t* out_g) {
     return new_p;
 }
 
+// Support for LowerPass names
+go_grade_t __go_grade_from_alloca(void* p, size_t n) {
+    go_grade_t g = {0};
+    g.base = (uint64_t)p;
+    g.end = (uint64_t)p + n;
+    g.flags = GO_BOUNDS_KIND_OBJECT;
+    return g;
+}
+
+go_grade_t __go_grade_from_malloc(void* p, size_t n) {
+    return __go_grade_from_alloca(p, n);
+}
+
+go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale) {
+    // Spatial safety: technically, object bounds don't change on GEP.
+    // However, if we wanted to enforce subobject bounds, we would tighten g.base/g.end here.
+    // In this MVP, we preserve object-level bounds for compatibility.
+    g.flags |= GO_BOUNDS_KIND_SUBOBJECT;
+    return g;
+}
+
+go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2) {
+    if (g1.base == g2.base && g1.end == g2.end) return g1;
+    go_grade_t g_top = {0};
+    g_top.end = -1ULL;
+    g_top.perms = 0xF;
+    return g_top;
+}
+
+// Improved Shadow metadata (hybrid) - Open addressing with linear probing
+#define SHADOW_CAP (1 << 20)
+static struct { void* addr; go_grade_t g; } shadow_map[SHADOW_CAP];
+
 void __go_shadow_store(void* slot_addr, go_grade_t g) {
-    // Stub for diagnostic tier
+    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
+    for (int i = 0; i < 16; ++i) { // Limited probing
+        unsigned idx = (h + i) & (SHADOW_CAP - 1);
+        if (shadow_map[idx].addr == NULL || shadow_map[idx].addr == slot_addr) {
+            shadow_map[idx].addr = slot_addr;
+            shadow_map[idx].g = g;
+            return;
+        }
+    }
+    // Fallback: overwrite first slot if full
+    shadow_map[h].addr = slot_addr;
+    shadow_map[h].g = g;
 }
 
 go_grade_t __go_shadow_load(void* slot_addr) {
-    go_grade_t g = {0};
-    return g;
+    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
+    for (int i = 0; i < 16; ++i) {
+        unsigned idx = (h + i) & (SHADOW_CAP - 1);
+        if (shadow_map[idx].addr == slot_addr) return shadow_map[idx].g;
+        if (shadow_map[idx].addr == NULL) break;
+    }
+    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
+    return g_top;
 }
 
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind) {
-    fprintf(stderr, "GOIR memcpy: %p -> %p (size: %zu)\n", src, dst, n);
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+    memcpy(dst, src, n);
 }

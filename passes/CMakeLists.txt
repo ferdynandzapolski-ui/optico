@@ -3,5 +3,11 @@ add_llvm_pass_plugin(GOIRPasses
   GoInitPass.h
   GoPropagatePass.cpp
   GoPropagatePass.h
+  GoCheckInsertPass.cpp
+  GoCheckInsertPass.h
+  GoMemIntrinsicPass.cpp
+  GoMemIntrinsicPass.h
+  GoLowerPass.cpp
+  GoLowerPass.h
   PassPlugin.cpp
 )
