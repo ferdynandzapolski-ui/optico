@@ -6,13 +6,14 @@ pub enum Token {
     ResourceKw, Protocol, State, Extern, Traversal,
     If, Else, Return, Later,
     Ident(String),
+    StringLit(String),
     IntLit(i64),
     FloatLit(f64),
     BoolLit(bool),
     CharLit(char),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
-    Bang, Plus, Minus, Slash,
+    Bang, Plus, Minus, Slash, At,
     Eq, Ne, Lt, Gt, Le, Ge,
     EOF,
 }
@@ -98,6 +99,7 @@ impl<'a> Lexer<'a> {
                     Token::Bang
                 }
             }
+            '@' => Token::At,
             '+' => Token::Plus,
             '-' => {
                 if self.peek() == Some('>') {
@@ -122,6 +124,30 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Gt
                 }
+            }
+            '"' => {
+                let mut s = String::new();
+                while let Some(c) = self.peek() {
+                    if c == '"' {
+                        self.advance();
+                        break;
+                    }
+                    if c == '\\' {
+                        self.advance();
+                        let escaped = self.advance().expect("Expected character after \\");
+                        match escaped {
+                            'n' => s.push('\n'),
+                            'r' => s.push('\r'),
+                            't' => s.push('\t'),
+                            '\\' => s.push('\\'),
+                            '"' => s.push('"'),
+                            _ => s.push(escaped),
+                        }
+                    } else {
+                        s.push(self.advance().unwrap());
+                    }
+                }
+                Token::StringLit(s)
             }
             '\'' => {
                 let val = self.advance().expect("Expected character after '");

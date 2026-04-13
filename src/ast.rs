@@ -10,12 +10,12 @@ pub enum Type {
     Resource(Vec<(String, Type)>, Option<String>, Option<String>, Option<crate::persistence::Durability>), // fields, state, protocol, durability
     ProtocolOptic(String, String, Box<Type>), // protocol, state, inner
     Co(Box<Type>, Option<crate::persistence::Durability>, Option<String>), // co Δ τ (with optional ContextID)
-    Optic(Box<Type>, Option<String>),          // optic τ* (with optional resource association)
-    Traversal(Box<Type>, Option<String>),      // traversal τ*
+    Optic(Box<Type>, Option<String>, Option<f64>),          // optic τ* (with optional resource association and confidence)
+    Traversal(Box<Type>, Option<String>, Option<f64>),      // traversal τ*
     Later(Box<Type>, Option<String>),          // I<k> τ
-    RecOptic(Box<Type>, Option<String>),       // rec optic τ* (with optional resource association)
-    AtomicOptic(Box<Type>, Option<String>),    // atomic optic τ* (with optional resource association)
-    Pointer(Box<Type>, String), // pointer<τ, ContextID>
+    RecOptic(Box<Type>, Option<String>, Option<f64>),       // rec optic τ* (with optional resource association and confidence)
+    AtomicOptic(Box<Type>, Option<String>, Option<f64>),    // atomic optic τ* (with optional resource association and confidence)
+    Pointer(Box<Type>, String, Option<f64>), // pointer<τ, ContextID, confidence>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,6 +31,7 @@ pub enum Expr {
     ConstFloat(f64),
     ConstBool(bool),
     ConstChar(char),
+    ConstString(String),
     Access(Box<Expr>, String), // e.l
     Call(Box<Expr>, Vec<Expr>), // e1(e2, ...)
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>), // if (e1) e2 [else e3]
