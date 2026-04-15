@@ -1,3 +1,4 @@
+use app::ast::Program;
 use app::parser::Parser;
 use app::sema::Sema;
 use app::cir::CIRLowerer;
@@ -9,22 +10,34 @@ use std::path::Path;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: optico <file.oco> [--goir-tier=<diag|hybrid|cap>]");
-        return;
-    }
-
-    let filepath = &args[1];
+    let mut input_files = Vec::new();
     let mut tier = "diag";
-    for arg in &args[2..] {
+
+    for arg in args.iter().skip(1) {
         if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("-") {
+            // ignore other flags
+        } else {
+            input_files.push(arg);
         }
     }
 
-    let content = fs::read_to_string(filepath).expect("Failed to read input file");
-    let mut parser = Parser::new(&content);
-    let prog = parser.parse_program();
+    if input_files.is_empty() {
+        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>]");
+        return;
+    }
+
+    let mut all_decls = Vec::new();
+    for file in &input_files {
+        let content = fs::read_to_string(file).expect(&format!("Failed to read input file: {}", file));
+        let mut parser = Parser::new(&content);
+        let prog = parser.parse_program();
+        all_decls.extend(prog.decls);
+    }
+
+    let prog = Program { decls: all_decls };
+    let filepath = input_files.last().unwrap();
 
     let mut sema = Sema::new();
     if Path::new("beliefs.json").exists() {
