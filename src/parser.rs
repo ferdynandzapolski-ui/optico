@@ -190,7 +190,7 @@ impl<'a> Parser<'a> {
 
         while self.current_token == Token::Star {
             self.advance();
-            ty = Type::Optic(Box::new(ty), None, None);
+            ty = Type::Optic(Box::new(ty), None, None, None);
         }
 
         if self.current_token == Token::At {
@@ -204,16 +204,64 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     ty = match ty {
-                        Type::Optic(inner, res, _) => Type::Optic(inner, res, Some(conf)),
-                        Type::Traversal(inner, res, _) => Type::Traversal(inner, res, Some(conf)),
-                        Type::RecOptic(inner, res, _) => Type::RecOptic(inner, res, Some(conf)),
-                        Type::AtomicOptic(inner, res, _) => Type::AtomicOptic(inner, res, Some(conf)),
+                        Type::Optic(inner, res, _, perf) => Type::Optic(inner, res, Some(conf), perf),
+                        Type::Traversal(inner, res, _, perf) => Type::Traversal(inner, res, Some(conf), perf),
+                        Type::RecOptic(inner, res, _, perf) => Type::RecOptic(inner, res, Some(conf), perf),
+                        Type::AtomicOptic(inner, res, _, perf) => Type::AtomicOptic(inner, res, Some(conf), perf),
                         Type::Pointer(inner, ctx, _) => Type::Pointer(inner, ctx, Some(conf)),
                         _ => panic!("Confidence annotation @ only allowed on optic or pointer types"),
                     };
                 }
                 _ => panic!("Expected confidence value after @"),
             }
+        }
+
+        if self.current_token == Token::PerfGrade {
+            self.advance();
+            self.expect(Token::LBrace);
+            let mut latency = 0;
+            let mut cache = 0;
+            let mut bandwidth = 0;
+            while self.current_token != Token::RBrace {
+                let key = match &self.current_token {
+                    Token::Ident(n) => n.clone(),
+                    _ => panic!("Expected key in PerfGrade"),
+                };
+                self.advance();
+                self.expect(Token::Colon);
+                let val = match &self.current_token {
+                    Token::IntLit(n) => *n as u32,
+                    _ => panic!("Expected integer value in PerfGrade"),
+                };
+                self.advance();
+                match key.as_str() {
+                    "latency" => latency = val,
+                    "cache" => cache = val,
+                    "bandwidth" => bandwidth = val,
+                    _ => panic!("Unknown key in PerfGrade: {}", key),
+                }
+                if self.current_token == Token::Comma {
+                    self.advance();
+                }
+            }
+            self.expect(Token::RBrace);
+            let perf = Some(PerfGrade { latency_us: latency, cache_lines: cache, bandwidth_gbps: bandwidth });
+            ty = match ty {
+                Type::Optic(inner, res, conf, _) => Type::Optic(inner, res, conf, perf),
+                Type::Traversal(inner, res, conf, _) => Type::Traversal(inner, res, conf, perf),
+                Type::RecOptic(inner, res, conf, _) => Type::RecOptic(inner, res, conf, perf),
+                Type::AtomicOptic(inner, res, conf, _) => Type::AtomicOptic(inner, res, conf, perf),
+                Type::Named(n) => {
+                    match n.as_str() {
+                        "optic" => Type::Optic(Box::new(Type::Int), None, None, perf),
+                        "traversal" => Type::Traversal(Box::new(Type::Int), None, None, perf),
+                        "rec" => Type::RecOptic(Box::new(Type::Int), None, None, perf),
+                        "atomic" => Type::AtomicOptic(Box::new(Type::Int), None, None, perf),
+                        _ => panic!("PerfGrade annotation only allowed on optic types"),
+                    }
+                }
+                _ => panic!("PerfGrade annotation only allowed on optic types, found {:?}", ty),
+            };
         }
 
         ty
@@ -260,7 +308,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::Optic(Box::new(inner), res_assoc, None)
+                Type::Optic(Box::new(inner), res_assoc, None, None)
             }
             Token::Traversal => {
                 self.advance();
@@ -274,7 +322,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::Traversal(Box::new(inner), res_assoc, None)
+                Type::Traversal(Box::new(inner), res_assoc, None, None)
             }
             Token::Later => {
                 self.advance();
@@ -302,7 +350,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::RecOptic(Box::new(inner), res_assoc, None)
+                Type::RecOptic(Box::new(inner), res_assoc, None, None)
             }
             Token::Atomic => {
                 self.advance();
@@ -317,7 +365,7 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                 }
-                Type::AtomicOptic(Box::new(inner), res_assoc, None)
+                Type::AtomicOptic(Box::new(inner), res_assoc, None, None)
             }
             Token::Pointer => {
                 self.advance();
@@ -634,25 +682,19 @@ impl<'a> Parser<'a> {
                         }
                     }
                     _ => {
-                        // If it's just a type without an identifier, it might be an expression
-                        // (though OptiCo v0.3 doesn't have many such things, maybe casts or similar in future)
-                        // For now, if we parsed a type and don't see an ident, it's likely an error in this context
-                        // unless it's something like pointer<...>(args) - but that should be handled by specific exprs.
                         panic!("Expected identifier after type in expr, found {:?}", self.current_token);
                     }
                 }
             }
             Token::Ident(n) => {
-                // Peek ahead to see if this is a type or a variable
                 let mut lex_copy = self.lexer.clone();
                 let next = lex_copy.next_token();
                 let is_decl = match next {
-                    Token::Ident(_) | Token::Star | Token::At => {
-                        // Check if it's not actually an expression like a < b or x * y
+                    Token::Ident(_) | Token::Star | Token::At | Token::PerfGrade => {
                         let mut next_lex = lex_copy.clone();
                         let after_next = next_lex.next_token();
                         match after_next {
-                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At => true,
+                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At | Token::PerfGrade | Token::LParen => true,
                             _ => false,
                         }
                     }
@@ -671,8 +713,6 @@ impl<'a> Parser<'a> {
                         let val = self.parse_expr();
                         Expr::LocalDecl(name, ty, Box::new(val))
                     } else {
-                        // Named variable declaration without assignment is not currently supported in local scope
-                        // or it was just a named type used in another context.
                         Expr::Var(name)
                     }
                 } else {
@@ -758,7 +798,7 @@ mod tests {
             Decl::Global(name, ty, _) => {
                 assert_eq!(name, "buffer");
                 match ty {
-                    Type::Optic(_inner, assoc, _) => {
+                    Type::Optic(_inner, assoc, _, _) => {
                         assert_eq!(assoc, &Some("f".to_string()));
                     }
                     _ => panic!("Expected Optic type"),
@@ -799,8 +839,8 @@ mod tests {
         match &prog.decls[0] {
             Decl::Global(_, ty, _) => {
                 match ty {
-                    Type::Traversal(inner, _, _) => {
-                        assert_eq!(**inner, Type::Optic(Box::new(Type::Int), None, None));
+                    Type::Traversal(inner, _, _, _) => {
+                        assert_eq!(**inner, Type::Optic(Box::new(Type::Int), None, None, None));
                     }
                     _ => panic!("Expected Traversal type"),
                 }
