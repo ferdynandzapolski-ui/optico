@@ -22,6 +22,17 @@ $$get(o_1)(put(o_2)(v, s)) = get(o_1)(s)$$
 
 This ensures that mutation through one optic never affects the view of a disjoint optic, effectively preventing data races and unexpected aliasing.
 
+### 1.1 Performance Grades
+OptiCo v0.3 introduces **Performance Grades** as static, compile-time metadata for optics. These grades express hardware-centric budgets:
+- **Latency (`latency_us`)**: Expected execution time in microseconds.
+- **Cache Pressure (`cache_lines`)**: Number of cache lines touched.
+- **Bandwidth (`bandwidth_gbps`)**: Minimum required memory bandwidth.
+
+Performance grades follow a **sequential composition algebra** (`o1 | o2`):
+- $Latency_{composed} = Latency_{o1} + Latency_{o2}$
+- $Cache_{composed} = Cache_{o1} + Cache_{o2}$
+- $Bandwidth_{composed} = \min(Bandwidth_{o1}, Bandwidth_{o2})$
+
 ## 2. Refined Abstract Syntax (BNF v0.3)
 
 The syntax introduces types for comonadic contexts, coinductive recursion, and the Nakano "later" modality for productivity.

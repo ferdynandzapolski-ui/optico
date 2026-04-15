@@ -15,6 +15,7 @@ pub enum Token {
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
     Bang, Plus, Minus, Slash, At,
     Eq, Ne, Lt, Gt, Le, Ge,
+    PerfGrade,
     EOF,
 }
 
@@ -221,6 +222,7 @@ impl<'a> Lexer<'a> {
                     "else" => Token::Else,
                     "return" => Token::Return,
                     "I" => Token::Later,
+                    "PerfGrade" => Token::PerfGrade,
                     "true" => Token::BoolLit(true),
                     "false" => Token::BoolLit(false),
                     _ => Token::Ident(s),
