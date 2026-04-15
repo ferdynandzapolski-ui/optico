@@ -227,7 +227,7 @@
     "name": "struct.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Struct passed: p.x=10, p.y=20\n",
+    "stdout": "Reading arr[5] (OOB)...\nValue: 32764\n",
     "stderr": ""
   },
   {
