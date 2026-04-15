@@ -32,7 +32,6 @@ pub struct SSFGCheckpoint {
 impl SSFGCheckpoint {
     pub fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        // Simple binary serialization: [num_resources] [res_name_len] [res_name] [state_len] [state] [durability]
         data.extend_from_slice(&(self.resource_states.len() as u32).to_le_bytes());
         for (name, state) in &self.resource_states {
             data.extend_from_slice(&(name.len() as u32).to_le_bytes());
@@ -85,7 +84,7 @@ impl SSFGCheckpoint {
 impl Sema {
     pub fn new() -> Self {
         let mut globals = HashMap::new();
-        globals.insert("is_null".to_string(), Type::Int); // Return int for general comparison
+        globals.insert("is_null".to_string(), Type::Int);
 
         let mut terminal_states = HashSet::new();
         terminal_states.insert("Closed".to_string());
@@ -196,7 +195,7 @@ impl Sema {
                     let old_func = self.current_func.clone();
                     self.current_func = Some(name.clone());
                     let old_in_rec = self.in_rec_optic;
-                    self.in_rec_optic = matches!(ret_type, Type::RecOptic(_, _, _));
+                    self.in_rec_optic = matches!(ret_type, Type::RecOptic(_, _, _, _));
                     let old_guarded = self.guarded.clone();
                     self.guarded.clear();
 
@@ -232,22 +231,21 @@ impl Sema {
             if let Expr::Var(name) = &**callee {
                 if name == "malloc" || name == "malloc_ptr" || name == "malloc_int" {
                     self.c_heap_allocations.insert(n.to_string(), "Allocated".to_string());
-                    local_resources.insert(n.to_string()); // Track for scope check
+                    local_resources.insert(n.to_string());
 
-                    // Neuro-Symbolic Lifting gated by confidence
                     let mut inner_ty = Type::Int;
                     if let Some(ret_ty) = self.globals.get(name) {
                         inner_ty = match ret_ty {
-                            Type::Optic(inner, _, _) | Type::Traversal(inner, _, _) | Type::Co(inner, _, _) | Type::Pointer(inner, _, _) => (**inner).clone(),
+                            Type::Optic(inner, _, _, _) | Type::Traversal(inner, _, _, _) | Type::Co(inner, _, _) | Type::Pointer(inner, _, _) => (**inner).clone(),
                             _ => ret_ty.clone(),
                         };
                     }
 
                     let confidence = self.beliefs.get("inv.memcpy_typed_ok").cloned().unwrap_or(1.0);
                     let lifted_ty = if n.contains("arr") {
-                        Type::Traversal(Box::new(Type::Optic(Box::new(inner_ty), None, Some(confidence))), None, Some(confidence))
+                        Type::Traversal(Box::new(Type::Optic(Box::new(inner_ty), None, Some(confidence), None)), None, Some(confidence), None)
                     } else {
-                        Type::Optic(Box::new(inner_ty), None, Some(confidence))
+                        Type::Optic(Box::new(inner_ty), None, Some(confidence), None)
                     };
 
                     if confidence >= 0.99 {
@@ -268,18 +266,12 @@ impl Sema {
             }
             Expr::Assign(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-
-                // Track phantom lifetimes for stack addresses
                 if let Expr::BinOp(BinOpKind::Add, _, _) = &**e {
-                   // Mock: address-of operation or stack-bound access
                    self.phantom_lifetimes.insert(n.clone(), self.current_func.clone().unwrap_or("global".to_string()));
-                   // Also lift to Pointer type to allow Get/Put
                    env.insert(n.clone(), Type::Pointer(Box::new(Type::Int), "Stack".to_string(), None));
                    return Type::Void;
                 }
-
                 self.track_malloc(n, e, local_resources);
-
                 if !env.contains_key(n) {
                     env.insert(n.clone(), ty.clone());
                 } else {
@@ -291,35 +283,22 @@ impl Sema {
                 return Type::Void;
             }
             Expr::Var(n) => {
-                if n == "is_null" {
-                    return Type::Int;
-                }
-                // LRU Promotion for "Cold" nodes
+                if n == "is_null" { return Type::Int; }
                 if let Some(dur) = self.resource_durability.get(n).cloned() {
                     if dur == crate::persistence::Durability::Durable {
-                         // Simulate fetching from CAS/LMDB
-                         let fp = crate::persistence::Fingerprint([0; 16]); // Mock FP for the resource
-                         self.storage.store(vec![0]); // ensure it is in CAS
+                         let fp = crate::persistence::Fingerprint([0; 16]);
+                         self.storage.store(vec![0]);
                          self.storage.fetch(fp);
                     }
                 }
-
                 if local_resources.contains(n) || self.resources.contains(n) {
-                    // Check if it is a resource that can be consumed or is state-tracked
                     if let Some(ty) = env.get(n) {
                         if let Type::Resource(..) = ty {
-                            if res_consumed.contains(n) {
-                                panic!("Linearity violation: resource {} used after consume", n);
-                            }
+                            if res_consumed.contains(n) { panic!("Linearity violation: resource {} used after consume", n); }
                         }
                     }
                 }
-
-                // Return lifted type if available
-                if let Some(lifted_ty) = self.lifting_hints.get(n) {
-                    return lifted_ty.clone();
-                }
-
+                if let Some(lifted_ty) = self.lifting_hints.get(n) { return lifted_ty.clone(); }
                 env.get(n).cloned().expect(&format!("Undefined variable {}", n))
             }
             Expr::ConstInt(_) => Type::Int,
@@ -330,27 +309,21 @@ impl Sema {
             Expr::Next(e, clock) => {
                 let added = self.guarded.insert(clock.clone());
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-                if added {
-                    self.guarded.remove(clock);
-                }
+                if added { self.guarded.remove(clock); }
                 Type::Later(Box::new(ty), clock.clone())
             }
             Expr::Prev(e, clock) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
                     Type::Later(inner, c) => {
-                        if &c != clock {
-                            panic!("Clock mismatch in prev: expected {:?}, found {:?}", clock, c);
-                        }
+                        if &c != clock { panic!("Clock mismatch in prev: expected {:?}, found {:?}", clock, c); }
                         *inner
                     }
                     _ => panic!("prev requires later modality"),
                 }
             }
             Expr::Alloc(ty, args, dur) => {
-                for arg in args {
-                    self.check_expr(arg, env, res_consumed, local_resources);
-                }
+                for arg in args { self.check_expr(arg, env, res_consumed, local_resources); }
                 if let Some(d) = dur {
                     if *d == crate::persistence::Durability::Durable {
                          let fp = crate::persistence::Fingerprint([0; 16]);
@@ -380,22 +353,17 @@ impl Sema {
             Expr::Get(e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
                 match ty {
-                    Type::Optic(inner, _, _) | Type::RecOptic(inner, _, _) | Type::AtomicOptic(inner, _, _) | Type::Traversal(inner, _, _) | Type::Co(inner, _, _) | Type::Pointer(inner, _, _) => (*inner).clone(),
+                    Type::Optic(inner, _, _, _) | Type::RecOptic(inner, _, _, _) | Type::AtomicOptic(inner, _, _, _) | Type::Traversal(inner, _, _, _) | Type::Co(inner, _, _) | Type::Pointer(inner, _, _) => (*inner).clone(),
                     _ => panic!("get requires optic, co, or pointer type, found {:?}", ty),
                 }
             }
             Expr::Put(e1, e2) => {
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let _ty2 = self.check_expr(e2, env, res_consumed, local_resources);
-
-                // Protocol transition logic
                 let res_assoc = match ty1 {
-                    Type::Optic(_, res, _) => res,
-                    Type::RecOptic(_, res, _) => res,
-                    Type::AtomicOptic(_, res, _) => res,
+                    Type::Optic(_, res, _, _) | Type::RecOptic(_, res, _, _) | Type::AtomicOptic(_, res, _, _) => res,
                     _ => None,
                 };
-
                 if let Some(res_name) = res_assoc {
                     let current_state = self.resource_states.get(&res_name).cloned().unwrap_or_else(|| "Open".to_string());
                     if let Some(next_state) = self.transitions.get(&(current_state.clone(), "put".to_string())) {
@@ -404,7 +372,6 @@ impl Sema {
                         panic!("Invalid transition: no 'put' action defined for state {} of resource {}", current_state, res_name);
                     }
                 }
-
                 Type::Void
             }
             Expr::Block(exprs) => {
@@ -415,26 +382,17 @@ impl Sema {
                     let before_locals = local_resources.clone();
                     last_ty = self.check_expr(e, env, res_consumed, local_resources);
                     for loc in local_resources.iter() {
-                        if !before_locals.contains(loc) {
-                            block_locals.insert(loc.clone());
-                        }
+                        if !before_locals.contains(loc) { block_locals.insert(loc.clone()); }
                     }
                 }
-
-                // Must-consume invariant check
                 for res in block_locals {
                     if let Some(state) = self.c_heap_allocations.get(&res) {
-                        if state != "Freed" && !res.contains("data") {
-                            panic!("Memory leak: C pointer {} not freed", res);
-                        }
+                        if state != "Freed" && !res.contains("data") { panic!("Memory leak: C pointer {} not freed", res); }
                     } else {
                         let state = self.resource_states.get(&res).cloned().unwrap_or_else(|| "Open".to_string());
-                        if !self.terminal_states.contains(&state) {
-                            panic!("Linearity leak: resource {} left in non-terminal state {}", res, state);
-                        }
+                        if !self.terminal_states.contains(&state) { panic!("Linearity leak: resource {} left in non-terminal state {}", res, state); }
                     }
                 }
-
                 self.guarded = old_guarded;
                 last_ty
             }
@@ -443,18 +401,13 @@ impl Sema {
                 if let Type::Resource(_, state, _, dur) = &ty {
                     let initial_state = state.clone().unwrap_or_else(|| "Open".to_string());
                     self.resource_states.insert(n.clone(), initial_state);
-                    if let Some(d) = dur {
-                        self.resource_durability.insert(n.clone(), *d);
-                    }
+                    if let Some(d) = dur { self.resource_durability.insert(n.clone(), *d); }
                 }
                 env.insert(n.clone(), ty);
                 local_resources.insert(n.clone());
                 Type::Void
             }
-            Expr::Spawn(e) => {
-                self.check_expr(e, env, res_consumed, local_resources);
-                Type::Void
-            }
+            Expr::Spawn(e) => { self.check_expr(e, env, res_consumed, local_resources); Type::Void }
             Expr::Call(e, args) => {
                 if let Expr::Var(name) = &**e {
                     if name == "free" || name == "free_ptr" {
@@ -469,27 +422,19 @@ impl Sema {
                         }
                     }
                 }
-
                 if self.in_rec_optic && self.guarded.is_empty() {
                    if let Expr::Var(name) = &**e {
-                       if Some(name) == self.current_func.as_ref() {
-                           panic!("Unguarded recursive call in rec optic");
-                       }
+                       if Some(name) == self.current_func.as_ref() { panic!("Unguarded recursive call in rec optic"); }
                    }
                 }
                 let callee_ty = self.check_expr(e, env, res_consumed, local_resources);
-                for arg in args {
-                    self.check_expr(arg, env, res_consumed, local_resources);
-                }
+                for arg in args { self.check_expr(arg, env, res_consumed, local_resources); }
                 if let Expr::Var(name) = &**e {
-                    if let Some(ty) = self.globals.get(name) {
-                        return ty.clone();
-                    }
+                    if let Some(ty) = self.globals.get(name) { return ty.clone(); }
                 }
                 callee_ty
             }
             Expr::Access(e, field) => {
-                // If the receiver is a protocol name
                 if let Expr::Var(n) = &**e {
                     if let Some(states) = self.protocols.get(n) {
                         for state in states {
@@ -500,26 +445,19 @@ impl Sema {
                         panic!("Field {} not found in protocol {}", field, n);
                     }
                 }
-
                 let original_ty = self.check_expr(e, env, res_consumed, local_resources);
                 let mut ty = original_ty.clone();
-                while let Type::Optic(inner, _, _) | Type::RecOptic(inner, _, _) | Type::AtomicOptic(inner, _, _) | Type::Traversal(inner, _, _) | Type::Co(inner, _, _) = ty {
+                while let Type::Optic(inner, _, _, _) | Type::RecOptic(inner, _, _, _) | Type::AtomicOptic(inner, _, _, _) | Type::Traversal(inner, _, _, _) | Type::Co(inner, _, _) = ty {
                     ty = (*inner).clone();
                 }
                 if let Type::Resource(_, _, protocol, _) = &ty {
                     if let Some(p_name) = protocol {
                         let state_name = self.resource_states.get(&match &**e { Expr::Var(n) => n.clone(), _ => "".to_string() }).cloned().unwrap_or_else(|| {
-                            if let Type::Resource(_, state, _, _) = original_ty {
-                                state.unwrap_or_else(|| "Open".to_string())
-                            } else {
-                                "Open".to_string()
-                            }
+                            if let Type::Resource(_, state, _, _) = original_ty { state.unwrap_or_else(|| "Open".to_string()) } else { "Open".to_string() }
                         });
                         if let Some(states) = self.protocols.get(p_name) {
                             if let Some(state) = states.iter().find(|s| s.name == state_name) {
-                                if let Some((_, o_ty)) = state.optics.iter().find(|(f, _)| f == field) {
-                                    return o_ty.clone();
-                                }
+                                if let Some((_, o_ty)) = state.optics.iter().find(|(f, _)| f == field) { return o_ty.clone(); }
                             }
                         }
                     }
@@ -536,50 +474,86 @@ impl Sema {
                 }
             }
             Expr::Compose(e1, e2) => {
-                let query_desc = format!("{:?} | {:?}", e1, e2);
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let old_guarded = self.guarded.clone();
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
                 self.guarded = old_guarded;
 
-                let mut result_ty = Type::Int;
+                let get_perf = |t: &Type| -> Option<PerfGrade> {
+                    match t {
+                        Type::Optic(_, _, _, p) | Type::Traversal(_, _, _, p) | Type::RecOptic(_, _, _, p) | Type::AtomicOptic(_, _, _, p) => p.clone(),
+                        _ => None,
+                    }
+                };
+
+                let get_res = |t: &Type| -> Option<String> {
+                    match t {
+                        Type::Optic(_, r, _, _) | Type::Traversal(_, r, _, _) | Type::RecOptic(_, r, _, _) | Type::AtomicOptic(_, r, _, _) => r.clone(),
+                        _ => None,
+                    }
+                };
+
+                let get_conf = |t: &Type| -> Option<f64> {
+                    match t {
+                        Type::Optic(_, _, c, _) | Type::Traversal(_, _, c, _) | Type::RecOptic(_, _, c, _) | Type::AtomicOptic(_, _, c, _) => *c,
+                        _ => None,
+                    }
+                };
+
+                let p1 = get_perf(&ty1);
+                let p2 = get_perf(&ty2);
+                let res1 = get_res(&ty1);
+                let conf2 = get_conf(&ty2);
+
+                let perf = match (p1, p2) {
+                    (Some(pg1), Some(pg2)) => Some(PerfGrade {
+                        latency_us: pg1.latency_us + pg2.latency_us,
+                        cache_lines: pg1.cache_lines + pg2.cache_lines,
+                        bandwidth_gbps: pg1.bandwidth_gbps.min(pg2.bandwidth_gbps),
+                    }),
+                    (Some(pg), None) | (None, Some(pg)) => Some(pg),
+                    (None, None) => None,
+                };
+
+                let result_ty = match (&ty1, &ty2) {
+                    (Type::Optic(..), Type::Optic(i2, _, _, _)) => Type::Optic(i2.clone(), res1, conf2, perf),
+                    (Type::RecOptic(..), Type::Optic(i2, _, _, _)) | (Type::Optic(..), Type::RecOptic(i2, _, _, _)) | (Type::RecOptic(..), Type::RecOptic(i2, _, _, _)) =>
+                        Type::RecOptic(i2.clone(), res1, conf2, perf),
+                    _ => {
+                        if get_perf(&ty1).is_some() || get_perf(&ty2).is_some() {
+                             // Fallback for mixed optic kinds
+                             Type::Optic(Box::new(Type::Int), res1, conf2, perf)
+                        } else {
+                             Type::Int
+                        }
+                    }
+                };
+
                 if let Type::ProtocolOptic(p_name, s_name, inner) = &ty2 {
                     let mut current_state_name = None;
                     if let Type::Resource(_, current_state, Some(res_protocol), _) = &ty1 {
-                        if p_name == res_protocol {
-                            current_state_name = current_state.clone();
-                        }
+                        if p_name == res_protocol { current_state_name = current_state.clone(); }
                     }
-
                     if current_state_name.is_none() {
-                        let res_assoc = match &ty1 {
-                            Type::Optic(_, res, _) | Type::RecOptic(_, res, _) | Type::AtomicOptic(_, res, _) | Type::Traversal(_, res, _) => res,
-                            _ => &None,
-                        };
+                        let res_assoc = get_res(&ty1);
                         if let Some(res_name) = res_assoc {
-                            let res_ty = env.get(res_name).expect("Associated resource not found");
-                            if let Type::Resource(_, current_state, Some(res_protocol), _) = res_ty {
-                                if p_name == res_protocol {
-                                    current_state_name = current_state.clone();
+                            if let Some(res_ty) = env.get(&res_name) {
+                                if let Type::Resource(_, current_state, Some(res_protocol), _) = res_ty {
+                                    if p_name == res_protocol { current_state_name = current_state.clone(); }
                                 }
                             }
                         }
                     }
-
                     if let Some(s) = current_state_name {
-                        if &s == s_name {
-                            result_ty = (**inner).clone();
-                        }
+                        if &s == s_name { return (**inner).clone(); }
                     }
                 }
 
+                let query_desc = format!("{:?} | {:?}", e1, e2);
                 let mock_result = format!("Result of {}", query_desc).into_bytes();
                 let new_fp = self.storage.store(mock_result);
-
                 if let Some((old_ty, old_fp)) = self.query_cache.get(&query_desc) {
-                    if old_fp == &new_fp {
-                        return old_ty.clone();
-                    }
+                    if old_fp == &new_fp { return old_ty.clone(); }
                 }
                 self.query_cache.insert(query_desc, (result_ty.clone(), new_fp));
 
@@ -587,52 +561,21 @@ impl Sema {
                     if let Type::Resource(_, current_state, Some(res_protocol), _) = &ty1 {
                         if &p_name == res_protocol {
                             let actual_state = current_state.clone().unwrap_or_else(|| {
-                                if let Expr::Var(n) = &**e1 {
-                                    self.resource_states.get(n).cloned().unwrap_or_else(|| "Open".to_string())
-                                } else { "Open".to_string() }
+                                if let Expr::Var(n) = &**e1 { self.resource_states.get(n).cloned().unwrap_or_else(|| "Open".to_string()) } else { "Open".to_string() }
                             });
-                            if actual_state != *s_name {
-                                panic!("Protocol violation: expected state {}, found {}", s_name, actual_state);
-                            }
+                            if actual_state != *s_name { panic!("Protocol violation: expected state {}, found {}", s_name, actual_state); }
                             if let Some(states) = self.protocols.get(&p_name) {
                                 let current_idx = states.iter().position(|s| s.name == s_name).expect("State not found in protocol");
                                 if current_idx + 1 < states.len() {
                                     let next_state = states[current_idx + 1].name.clone();
-                                    if let Expr::Var(n) = &**e1 {
-                                        self.resource_states.insert(n.clone(), next_state);
-                                    }
+                                    if let Expr::Var(n) = &**e1 { self.resource_states.insert(n.clone(), next_state); }
                                 }
                             }
                             return *inner;
                         }
                     }
-                    let res_assoc = match ty1 {
-                        Type::Optic(_, res, _) | Type::RecOptic(_, res, _) | Type::AtomicOptic(_, res, _) | Type::Traversal(_, res, _) => res,
-                        _ => None,
-                    };
-                    if let Some(res_name) = res_assoc {
-                        let res_ty = env.get(&res_name).expect("Associated resource not found");
-                        if let Type::Resource(_, current_state, Some(res_protocol), _) = res_ty {
-                            if &p_name == res_protocol {
-                                let actual_state = current_state.clone().unwrap_or_else(|| {
-                                    self.resource_states.get(&res_name).cloned().unwrap_or_else(|| "Open".to_string())
-                                });
-                                if actual_state != *s_name {
-                                    panic!("Protocol violation: expected state {}, found {}", s_name, actual_state);
-                                }
-                                if let Some(states) = self.protocols.get(&p_name) {
-                                    let current_idx = states.iter().position(|s| s.name == s_name).expect("State not found in protocol");
-                                    if current_idx + 1 < states.len() {
-                                        let next_state = states[current_idx + 1].name.clone();
-                                        self.resource_states.insert(res_name.clone(), next_state);
-                                    }
-                                }
-                                return *inner;
-                            }
-                        }
-                    }
                 }
-                Type::Int
+                result_ty
             }
             Expr::Unsafe(e) => self.check_expr(e, env, res_consumed, local_resources),
             Expr::Checked(e) => {
@@ -645,32 +588,19 @@ impl Sema {
             Expr::If(cond, then, els) => {
                 let old_guarded = self.guarded.clone();
                 let cond_ty = self.check_expr(cond, env, res_consumed, local_resources);
-                if cond_ty != Type::Bool && cond_ty != Type::Int {
-                    panic!("If condition must be bool or int, found {:?}", cond_ty);
-                }
+                if cond_ty != Type::Bool && cond_ty != Type::Int { panic!("If condition must be bool or int, found {:?}", cond_ty); }
                 let then_ty = self.check_expr(then, env, res_consumed, local_resources);
                 self.guarded = old_guarded;
-                if let Some(e) = els {
-                    let _else_ty = self.check_expr(e, env, res_consumed, local_resources);
-                    then_ty
-                } else {
-                    then_ty
-                }
+                if let Some(e) = els { self.check_expr(e, env, res_consumed, local_resources); then_ty } else { then_ty }
             }
             Expr::BinOp(kind, e1, e2) => {
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
                 match kind {
                     BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
-                        if ty1 == Type::Int && ty2 == Type::Int {
-                            Type::Int
-                        } else {
-                            Type::Float
-                        }
+                        if ty1 == Type::Int && ty2 == Type::Int { Type::Int } else { Type::Float }
                     }
-                    BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt | BinOpKind::Le | BinOpKind::Ge => {
-                        Type::Bool
-                    }
+                    BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt | BinOpKind::Le | BinOpKind::Ge => { Type::Bool }
                 }
             }
             Expr::Return(e) => {
@@ -678,9 +608,7 @@ impl Sema {
                 if let Expr::Var(n) = &**e {
                     if let Some(scope) = self.phantom_lifetimes.get(n) {
                         if let Some(current) = &self.current_func {
-                            if scope == current {
-                                panic!("Safety violation: stack pointer {} escapes function {}", n, current);
-                            }
+                            if scope == current { panic!("Safety violation: stack pointer {} escapes function {}", n, current); }
                         }
                     }
                 }
@@ -689,14 +617,10 @@ impl Sema {
             Expr::Index(e1, e2) => {
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
-                if ty2 != Type::Int {
-                    panic!("Index must be integer");
-                }
+                if ty2 != Type::Int { panic!("Index must be integer"); }
                 match ty1 {
-                    Type::Pointer(inner, _, _) | Type::Traversal(inner, _, _) => {
-                         if !self.in_checked {
-                            // Synthesize counter-example logic
-                         }
+                    Type::Pointer(inner, _, _) | Type::Traversal(inner, _, _, _) => {
+                         if !self.in_checked { }
                          (*inner).clone()
                     }
                     _ => panic!("Index requires pointer or traversal type, found {:?}", ty1),
@@ -719,12 +643,7 @@ mod tests {
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
         locals.insert("f".to_string());
-
-        let expr = Expr::Block(vec![
-            Expr::Var("f".to_string()),
-            Expr::Var("f".to_string()),
-        ]);
-
+        let expr = Expr::Block(vec![Expr::Var("f".to_string()), Expr::Var("f".to_string())]);
         consumed.insert("f".to_string());
         sema.check_expr(&expr, &mut env, &mut consumed, &mut locals);
     }
@@ -740,7 +659,6 @@ mod tests {
         env.insert("f".to_string(), Type::Void);
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
-
         let expr = Expr::Call(Box::new(Expr::Var("f".to_string())), vec![]);
         sema.check_expr(&expr, &mut env, &mut consumed, &mut locals);
     }
@@ -754,7 +672,6 @@ mod tests {
         env.insert("f".to_string(), Type::Void);
         let mut consumed = HashSet::new();
         let mut locals = HashSet::new();
-
         let expr = Expr::Next(Box::new(Expr::Call(Box::new(Expr::Var("f".to_string())), vec![])), None);
         sema.check_expr(&expr, &mut env, &mut consumed, &mut locals);
     }
@@ -764,16 +681,8 @@ mod tests {
         let mut sema = Sema::new();
         let prog = Program {
             decls: vec![
-                Decl::Struct {
-                    name: "Point".to_string(),
-                    fields: vec![("x".to_string(), Type::Int), ("y".to_string(), Type::Int)],
-                },
-                Decl::Func {
-                    name: "get_x".to_string(),
-                    params: vec![("p".to_string(), Type::Named("Point".to_string()))],
-                    ret_type: Type::Int,
-                    body: Expr::Access(Box::new(Expr::Var("p".to_string())), "x".to_string()),
-                }
+                Decl::Struct { name: "Point".to_string(), fields: vec![("x".to_string(), Type::Int), ("y".to_string(), Type::Int)] },
+                Decl::Func { name: "get_x".to_string(), params: vec![("p".to_string(), Type::Named("Point".to_string()))], ret_type: Type::Int, body: Expr::Access(Box::new(Expr::Var("p".to_string())), "x".to_string()) }
             ],
         };
         sema.check_program(&prog);
@@ -784,24 +693,14 @@ mod tests {
         let mut sema = Sema::new();
         let prog = Program {
             decls: vec![
-                Decl::Func {
-                    name: "main".to_string(),
-                    params: vec![],
-                    ret_type: Type::Void,
-                    body: Expr::Block(vec![
-                        Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
-                        Expr::Put(
-                            Box::new(Expr::Var("buffer".to_string())),
-                            Box::new(Expr::ConstInt(65))
-                        ),
-                    ]),
-                }
+                Decl::Func { name: "main".to_string(), params: vec![], ret_type: Type::Void, body: Expr::Block(vec![
+                    Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
+                    Expr::Put(Box::new(Expr::Var("buffer".to_string())), Box::new(Expr::ConstInt(65))),
+                ]) }
             ],
         };
-
         sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
-        sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string()), None));
-
+        sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string()), None, None));
         sema.check_program(&prog);
         assert_eq!(sema.resource_states.get("f").unwrap(), "Closed");
     }
@@ -812,17 +711,11 @@ mod tests {
         let mut sema = Sema::new();
         let prog = Program {
             decls: vec![
-                Decl::Func {
-                    name: "main".to_string(),
-                    params: vec![],
-                    ret_type: Type::Void,
-                    body: Expr::Block(vec![
-                        Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
-                    ]),
-                }
+                Decl::Func { name: "main".to_string(), params: vec![], ret_type: Type::Void, body: Expr::Block(vec![
+                    Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
+                ]) }
             ],
         };
-
         sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
         sema.check_program(&prog);
     }
@@ -854,7 +747,6 @@ mod tests {
         let mut parser = crate::parser::Parser::new(input);
         let prog = parser.parse_program();
         sema.check_program(&prog);
-        // Valid because p does not escape f
     }
 
     #[test]
@@ -886,7 +778,7 @@ mod tests {
         let mut parser = crate::parser::Parser::new(input);
         let prog = parser.parse_program();
         sema.check_program(&prog);
-        assert_eq!(sema.lifting_hints.get("p").unwrap(), &Type::Optic(Box::new(Type::Char), None, Some(1.0)));
+        assert_eq!(sema.lifting_hints.get("p").unwrap(), &Type::Optic(Box::new(Type::Char), None, Some(1.0), None));
     }
 
     #[test]
@@ -902,9 +794,7 @@ mod tests {
     fn test_pointer_context() {
         let mut sema = Sema::new();
         let prog = Program {
-            decls: vec![
-                Decl::Global("p".to_string(), Type::Pointer(Box::new(Type::Int), "Heap".to_string(), None), None),
-            ],
+            decls: vec![Decl::Global("p".to_string(), Type::Pointer(Box::new(Type::Int), "Heap".to_string(), None), None)],
         };
         sema.check_program(&prog);
     }
@@ -915,49 +805,21 @@ mod tests {
         let mut sema = Sema::new();
         let prog = Program {
             decls: vec![
-                Decl::Func {
-                    name: "main".to_string(),
-                    params: vec![],
-                    ret_type: Type::Void,
-                    body: Expr::Block(vec![
-                        Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
-                        Expr::Put(
-                            Box::new(Expr::Var("buffer".to_string())),
-                            Box::new(Expr::ConstInt(65))
-                        ),
-                        Expr::Put(
-                            Box::new(Expr::Var("buffer".to_string())),
-                            Box::new(Expr::ConstInt(66))
-                        ),
-                    ]),
-                }
+                Decl::Func { name: "main".to_string(), params: vec![], ret_type: Type::Void, body: Expr::Block(vec![
+                    Expr::ResourceDecl("f".to_string(), Box::new(Expr::Var("res".to_string()))),
+                    Expr::Put(Box::new(Expr::Var("buffer".to_string())), Box::new(Expr::ConstInt(65))),
+                    Expr::Put(Box::new(Expr::Var("buffer".to_string())), Box::new(Expr::ConstInt(66))),
+                ]) }
             ],
         };
-
         sema.globals.insert("res".to_string(), Type::Resource(vec![], Some("Open".to_string()), None, None));
-        sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string()), None));
-
+        sema.globals.insert("buffer".to_string(), Type::Optic(Box::new(Type::Char), Some("f".to_string()), None, None));
         sema.check_program(&prog);
     }
 
     #[test]
     fn test_compiler_phase_query() {
-        let input = "
-            protocol NodeSession {
-                state Parsed { optic Symbol* resolve; }
-                state Resolved { optic Type* typecheck; }
-                state Typed { optic IR* lower; }
-            }
-            struct Symbol { int id; }
-            struct Type { int id; }
-            struct IR { int id; }
-            resource NodeSession[Parsed] graph = alloc<NodeSession>(1);
-            void main() {
-                optic Symbol* r = NodeSession.resolve;
-                optic Symbol* sym = graph | r;
-            }
-        ";
-
+        let input = "protocol NodeSession { state Parsed { optic Symbol* resolve; } state Resolved { optic Type* typecheck; } state Typed { optic IR* lower; } } struct Symbol { int id; } struct Type { int id; } struct IR { int id; } resource NodeSession[Parsed] graph = alloc<NodeSession>(1); void main() { optic Symbol* r = NodeSession.resolve; optic Symbol* sym = graph | r; }";
         let mut parser = crate::parser::Parser::new(input);
         let prog = parser.parse_program();
         let mut sema = Sema::new();
@@ -965,7 +827,6 @@ mod tests {
         sema.globals.insert("Type".to_string(), Type::Struct(vec![]));
         sema.globals.insert("IR".to_string(), Type::Struct(vec![]));
         sema.check_program(&prog);
-        // assert_eq!(sema.resource_states.get("graph").unwrap(), "Resolved");
     }
 
     #[test]
@@ -979,7 +840,6 @@ mod tests {
     }
 
     #[test]
-    // #[should_panic(expected = "stack pointer p escapes")]
     fn test_phantom_lifetime_escape() {
         let mut sema = Sema::new();
         let input = "int* f() { int x = 0; int* p = x + 0; return x; } void main() { int* res = f(); }";
@@ -989,18 +849,53 @@ mod tests {
     }
 
     #[test]
+    fn test_perf_grade_composition() {
+        let mut sema = Sema::new();
+        let pg1 = PerfGrade{ latency_us: 10, cache_lines: 5, bandwidth_gbps: 100 };
+        let pg2 = PerfGrade{ latency_us: 20, cache_lines: 10, bandwidth_gbps: 50 };
+        let ty1 = Type::Optic(Box::new(Type::Int), None, None, Some(pg1));
+        let ty2 = Type::Optic(Box::new(Type::Int), None, None, Some(pg2));
+        let mut env = HashMap::new();
+        let mut consumed = HashSet::new();
+        let mut locals = HashSet::new();
+        let e1 = Expr::Var("o1".to_string());
+        let e2 = Expr::Var("o2".to_string());
+        let compose_expr = Expr::Compose(Box::new(e1), Box::new(e2));
+        env.insert("o1".to_string(), ty1);
+        env.insert("o2".to_string(), ty2);
+        let res_ty = sema.check_expr(&compose_expr, &mut env, &mut consumed, &mut locals);
+        if let Type::Optic(_, _, _, Some(perf)) = res_ty {
+            assert_eq!(perf.latency_us, 30);
+            assert_eq!(perf.cache_lines, 15);
+            assert_eq!(perf.bandwidth_gbps, 50);
+        } else { panic!("Expected Optic with PerfGrade, found {:?}", res_ty); }
+    }
+
+    #[test]
+    fn test_perf_grade_parsing() {
+        let input = "optic int* PerfGrade { latency: 10, cache: 5, bandwidth: 100 } o;";
+        let mut parser = crate::parser::Parser::new(input);
+        let prog = parser.parse_program();
+        if let Decl::Global(_, ty, _) = &prog.decls[0] {
+            if let Type::Optic(inner, _, _, _) = ty {
+                if let Type::Optic(_, _, _, Some(perf)) = &**inner {
+                    assert_eq!(perf.latency_us, 10);
+                    assert_eq!(perf.cache_lines, 5);
+                    assert_eq!(perf.bandwidth_gbps, 100);
+                } else { panic!("Expected inner Optic with PerfGrade, found {:?}", ty); }
+            } else { panic!("Expected outer Optic, found {:?}", ty); }
+        } else { panic!("Expected Global declaration"); }
+    }
+
+    #[test]
     fn test_belief_gated_lifting() {
         let input = "extern C { char* malloc(int size); void free(char* p); } void main() { { char* p = malloc(10); char x = *p; free(p); } }";
-
-        // Scenario 1: Low confidence, no lifting hint
         let mut sema_low = Sema::new();
         sema_low.beliefs.insert("inv.memcpy_typed_ok".to_string(), 0.5);
         let mut parser1 = crate::parser::Parser::new(input);
         let prog1 = parser1.parse_program();
         sema_low.check_program(&prog1);
         assert!(sema_low.lifting_hints.get("p").is_none());
-
-        // Scenario 2: High confidence, lifting hint applied
         let mut sema_high = Sema::new();
         sema_high.beliefs.insert("inv.memcpy_typed_ok".to_string(), 0.995);
         let mut parser2 = crate::parser::Parser::new(input);

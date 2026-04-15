@@ -1,4 +1,11 @@
 #[derive(Debug, Clone, PartialEq)]
+pub struct PerfGrade {
+    pub latency_us: u32,
+    pub cache_lines: u32,
+    pub bandwidth_gbps: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
     Float,
@@ -10,11 +17,11 @@ pub enum Type {
     Resource(Vec<(String, Type)>, Option<String>, Option<String>, Option<crate::persistence::Durability>), // fields, state, protocol, durability
     ProtocolOptic(String, String, Box<Type>), // protocol, state, inner
     Co(Box<Type>, Option<crate::persistence::Durability>, Option<String>), // co Δ τ (with optional ContextID)
-    Optic(Box<Type>, Option<String>, Option<f64>),          // optic τ* (with optional resource association and confidence)
-    Traversal(Box<Type>, Option<String>, Option<f64>),      // traversal τ*
+    Optic(Box<Type>, Option<String>, Option<f64>, Option<PerfGrade>),          // optic τ* (with optional resource association, confidence, and perf grade)
+    Traversal(Box<Type>, Option<String>, Option<f64>, Option<PerfGrade>),      // traversal τ*
     Later(Box<Type>, Option<String>),          // I<k> τ
-    RecOptic(Box<Type>, Option<String>, Option<f64>),       // rec optic τ* (with optional resource association and confidence)
-    AtomicOptic(Box<Type>, Option<String>, Option<f64>),    // atomic optic τ* (with optional resource association and confidence)
+    RecOptic(Box<Type>, Option<String>, Option<f64>, Option<PerfGrade>),       // rec optic τ* (with optional resource association, confidence, and perf grade)
+    AtomicOptic(Box<Type>, Option<String>, Option<f64>, Option<PerfGrade>),    // atomic optic τ* (with optional resource association, confidence, and perf grade)
     Pointer(Box<Type>, String, Option<f64>), // pointer<τ, ContextID, confidence>
 }
 

@@ -1,0 +1,50 @@
+// std/net.oco - Networking and TLS Optics for OptiCo v0.3
+
+struct ByteBuf {
+    int capacity;
+    int size;
+    pointer<char, Heap> data;
+}
+
+struct TlsState {
+    int version;
+    int handshake_complete;
+    int session_id;
+}
+
+struct HttpState {
+    int method;
+    int status;
+    int keep_alive;
+}
+
+struct HttpConnection {
+    ByteBuf in_buffer;
+    ByteBuf out_buffer;
+    TlsState tls;
+    HttpState http;
+}
+
+// TLS as a coinductive recursive optic
+rec optic HttpConnection* PerfGrade { latency: 50, cache: 10, bandwidth: 10 } TlsHandler(co Normal<ConnID> HttpConnection* conn) {
+    // Conceptually: decrypt(conn->in_buffer) -> plaintext, update conn->tls
+    // For MVP, we model the optic with performance grades
+    conn
+}
+
+optic HttpConnection* PerfGrade { latency: 10, cache: 5, bandwidth: 20 } RequestParser(optic HttpConnection* conn) {
+    conn
+}
+
+void main() {
+    co Normal<ConnID> HttpConnection* conn = alloc<HttpConnection>(1);
+
+    rec optic HttpConnection* tls = TlsHandler;
+    optic HttpConnection* parser = RequestParser;
+
+    // Composed pipeline: TLS -> Parser
+    // Sequential composition adds latencies and cache lines, takes min bandwidth
+    optic HttpConnection* pipeline = tls | parser;
+
+    *pipeline;
+}
