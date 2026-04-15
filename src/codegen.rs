@@ -5,78 +5,77 @@ pub struct CodeGenerator;
 impl CodeGenerator {
     pub fn generate(ops: &[CIROp]) -> String {
         let mut out = String::new();
+        out.push_str("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"\n");
+        out.push_str("target triple = \"x86_64-pc-linux-gnu\"\n\n");
+
+        out.push_str("declare ptr @malloc(i64)\n");
+        out.push_str("declare void @free(ptr)\n\n");
+
+        out.push_str("define i32 @main() {\n");
+        out.push_str("  %1 = alloca i32, align 4\n");
+        out.push_str("  store i32 0, ptr %1, align 4\n");
+
+        let mut counter = 0;
         for op in ops {
-            out.push_str(&Self::gen_op(op, 0));
-            out.push('\n');
+            out.push_str(&Self::gen_op(op, 1, &mut counter));
         }
+
+        out.push_str("  ret i32 0\n");
+        out.push_str("}\n");
         out
     }
 
-    fn gen_op(op: &CIROp, indent: usize) -> String {
+    fn gen_op(op: &CIROp, indent: usize, counter: &mut usize) -> String {
         let pad = "  ".repeat(indent);
+        let id = *counter;
+        *counter += 1;
         match op {
-            CIROp::Load(n) => format!("{}load {}", pad, n),
-            CIROp::Store(n, v) => format!("{}store {} = (\n{}{})", pad, n, Self::gen_op(v, indent + 1), pad),
-            CIROp::Get(v) => format!("{}get (\n{}{})", pad, Self::gen_op(v, indent + 1), pad),
-            CIROp::Put(e1, e2) => format!("{}put (\n{}{},\n{}{})", pad, Self::gen_op(e1, indent + 1), pad, Self::gen_op(e2, indent + 1), pad),
-            CIROp::Compose(e1, e2) => format!("{}compose (\n{}{},\n{}{})", pad, Self::gen_op(e1, indent + 1), pad, Self::gen_op(e2, indent + 1), pad),
-            CIROp::Alloc(ty, args, dur) => {
-                let mut s = format!("{}alloc<{:?}, {:?}> (\n", pad, ty, dur);
-                for arg in args {
-                    s.push_str(&Self::gen_op(arg, indent + 1));
-                    s.push_str(",\n");
-                }
-                s.push_str(&format!("{})", pad));
+            CIROp::Load(n) => {
+                format!("{}%tmp_ptr_{} = load ptr, ptr %p_{}, align 8\n", pad, id, n)
+            }
+            CIROp::Store(n, v) => {
+                let mut s = Self::gen_op(v, indent, counter);
+                let last_id = *counter - 1;
+                s.push_str(&format!("{}%p_{} = alloca ptr, align 8\n", pad, n));
+                s.push_str(&format!("{}store ptr %tmp_val_{}, ptr %p_{}, align 8\n", pad, last_id, n));
                 s
             }
-            CIROp::Free(e) => format!("{}free (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
-            CIROp::Fetch(fp) => format!("{}fetch {:?}", pad, fp),
-            CIROp::Persist(v, dur) => format!("{}persist (\n{}{},\n{}  {:?})", pad, Self::gen_op(v, indent + 1), pad, pad, dur),
-            CIROp::Checkpoint(n) => format!("{}checkpoint {}", pad, n),
-            CIROp::Next(e, clock) => format!("{}next<{:?}> (\n{}{})", pad, clock, Self::gen_op(e, indent + 1), pad),
-            CIROp::Prev(e, clock) => format!("{}prev<{:?}> (\n{}{})", pad, clock, Self::gen_op(e, indent + 1), pad),
-            CIROp::Call(n, args) => {
-                let mut s = format!("{}call {} (\n", pad, n);
-                for arg in args {
-                    s.push_str(&Self::gen_op(arg, indent + 1));
-                    s.push_str(",\n");
-                }
-                s.push_str(&format!("{})", pad));
+            CIROp::Alloc(ty, _args, _dur) => {
+                let size = match ty {
+                    crate::ast::Type::Int => 4,
+                    _ => 8,
+                };
+                format!("{}%tmp_val_{} = call ptr @malloc(i64 {})\n", pad, id, size)
+            }
+            CIROp::Free(e) => {
+                let mut s = Self::gen_op(e, indent, counter);
+                let last_id = *counter - 1;
+                s.push_str(&format!("{}call void @free(ptr %tmp_ptr_{})\n", pad, last_id));
                 s
             }
-            CIROp::Spawn(e) => format!("{}spawn (\n{}{})", pad, Self::gen_op(e, indent + 1), pad),
             CIROp::Block(ops) => {
-                let mut s = format!("{}block {{\n", pad);
+                let mut s = String::new();
                 for op in ops {
-                    s.push_str(&Self::gen_op(op, indent + 1));
-                    s.push_str("\n");
+                    s.push_str(&Self::gen_op(op, indent, counter));
                 }
-                s.push_str(&format!("{}}}", pad));
                 s
             }
-            CIROp::StructDecl(name, fields) => {
-                let mut s = format!("{}struct {} {{\n", pad, name);
-                for (f_name, f_ty) in fields {
-                    s.push_str(&format!("{}  {:?} {};\n", pad, f_ty, f_name));
-                }
-                s.push_str(&format!("{}}}", pad));
+            CIROp::Put(e1, e2) => {
+                let mut s = Self::gen_op(e2, indent, counter);
+                let id2 = *counter - 1;
+                s.push_str(&Self::gen_op(e1, indent, counter));
+                let id1 = *counter - 1;
+                s.push_str(&format!("{}%tmp_loaded_{} = load i32, ptr %tmp_val_{}, align 4\n", pad, id, id2));
+                s.push_str(&format!("{}store i32 %tmp_loaded_{}, ptr %tmp_ptr_{}, align 4\n", pad, id, id1));
                 s
             }
-            CIROp::ResourceDecl(name, ty, val) => {
-                format!("{}resource {:?} {} = (\n{}{})", pad, ty, name, Self::gen_op(val, indent + 1), pad)
+            CIROp::Get(e) => {
+                Self::gen_op(e, indent, counter)
             }
-            CIROp::ProtocolDecl(name, states) => {
-                let mut s = format!("{}protocol {} {{\n", pad, name);
-                for state in states {
-                    s.push_str(&format!("{}  state {} {{\n", pad, state.name));
-                    for (o_name, o_ty) in &state.optics {
-                        s.push_str(&format!("{}    {:?} {};\n", pad, o_ty, o_name));
-                    }
-                    s.push_str(&format!("{}  }}\n", pad));
-                }
-                s.push_str(&format!("{}}}", pad));
-                s
+            CIROp::ConstInt(v) => {
+                format!("{}%tmp_val_{}_raw = alloca i32, align 4\n{}store i32 {}, ptr %tmp_val_{}_raw, align 4\n{}%tmp_val_{} = load ptr, ptr %tmp_val_{}_raw, align 8\n", pad, id, pad, v, id, pad, id, id)
             }
+            _ => format!("{}; unhandled op {:?}\n", pad, op),
         }
     }
 }

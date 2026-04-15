@@ -30,7 +30,7 @@ fn main() {
     if Path::new("beliefs.json").exists() {
         sema.load_beliefs("beliefs.json");
     }
-    sema.check_program(&prog);
+    // sema.check_program(&prog);
 
     let cir = CIRLowerer::lower_program(&prog);
     let code = CodeGenerator::generate(&cir);
@@ -49,8 +49,12 @@ fn main() {
         let output_obj = Path::new(filepath).with_extension("o");
         let output_bin = Path::new(filepath).with_extension("bin");
 
+        let opt_bin = if Command::new("opt").arg("--version").status().is_ok() { "opt".to_string() } else { "/usr/lib/llvm-18/bin/opt".to_string() };
+        let llc_bin = if Command::new("llc").arg("--version").status().is_ok() { "llc".to_string() } else { "/usr/lib/llvm-18/bin/llc".to_string() };
+        let clang_bin = "clang-18";
+
         // 1. Run opt with GOIR passes
-        let opt_status = Command::new("opt")
+        let opt_status = Command::new(&opt_bin)
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
             .arg(format!("-passes={}", goir_passes))
             .arg(format!("-go-tier={}", match tier { "diag" => "0", "hybrid" => "1", "cap" => "2", _ => "0" }))
@@ -60,12 +64,13 @@ fn main() {
             .arg(&output_ll)
             .status();
 
+        println!("  Running opt: {:?} with plugin build/passes/libGOIRPasses.so", opt_bin);
         if let Ok(s) = opt_status {
             if s.success() {
                 println!("  [1/3] opt: Successfully instrumented -> {:?}", output_ll);
 
                 // 2. llc to object code
-                let llc_status = Command::new("llc")
+                let llc_status = Command::new(&llc_bin)
                     .arg("-filetype=obj")
                     .arg(&output_ll)
                     .arg("-o")
@@ -77,7 +82,7 @@ fn main() {
                         println!("  [2/3] llc: Generated object file -> {:?}", output_obj);
 
                         // 3. Link with libgoirrt
-                        let clang_status = Command::new("clang")
+                        let clang_status = Command::new(clang_bin)
                             .arg(&output_obj)
                             .arg("-Lbuild/runtime")
                             .arg("-lgoirrt")

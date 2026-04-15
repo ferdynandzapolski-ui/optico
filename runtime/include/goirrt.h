@@ -43,6 +43,17 @@ go_grade_t __go_shadow_load(void* slot_addr);
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memset(void* dst, go_grade_t gdst, uint8_t val, size_t n);
+
+// Provenance policy
+void __go_prov_expose(const void* p, go_grade_t g, uint32_t site);
+go_grade_t __go_inttoptr_resolve(uint64_t i, uint32_t policy, uint32_t site);
+
+// Grade helpers for LowerPass
+go_grade_t __go_grade_from_alloca(void* p, size_t n);
+go_grade_t __go_grade_from_malloc(void* p, size_t n);
+go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale);
+go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2);
 
 #ifdef __cplusplus
 }

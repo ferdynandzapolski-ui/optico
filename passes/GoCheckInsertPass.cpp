@@ -60,6 +60,18 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                         uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
                         Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
                     }
+                } else if (auto *RMW = dyn_cast<AtomicRMWInst>(&I)) {
+                    Value *Ptr = RMW->getPointerOperand();
+                    if (Value *G = getGrade(Ptr)) {
+                        uint64_t Size = M.getDataLayout().getTypeStoreSize(RMW->getValOperand()->getType());
+                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+                    }
+                } else if (auto *CXI = dyn_cast<AtomicCmpXchgInst>(&I)) {
+                    Value *Ptr = CXI->getPointerOperand();
+                    if (Value *G = getGrade(Ptr)) {
+                        uint64_t Size = M.getDataLayout().getTypeStoreSize(CXI->getNewValOperand()->getType());
+                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+                    }
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
                     if (Callee && Callee->getName() == "free") {

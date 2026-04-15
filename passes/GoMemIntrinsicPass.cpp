@@ -28,6 +28,7 @@ void GoMemIntrinsicPass::ensureTypes(Module &M) {
     Type *I32Ty = Type::getInt32Ty(Ctx);
 
     MemcpyFn = M.getOrInsertFunction("__go_memcpy", Type::getVoidTy(Ctx), PtrTy, GradeTy, PtrTy, GradeTy, SizeTy, I32Ty);
+    MemsetFn = M.getOrInsertFunction("__go_memset", Type::getVoidTy(Ctx), PtrTy, GradeTy, Type::getInt8Ty(Ctx), SizeTy);
 }
 
 PreservedAnalyses GoMemIntrinsicPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -73,6 +74,71 @@ PreservedAnalyses GoMemIntrinsicPass::run(Module &M, ModuleAnalysisManager &AM) 
                         if (!GSrc) GSrc = getTOP();
 
                         Builder.CreateCall(MemcpyFn, {Dst, GDst, Src, GSrc, Len, Builder.getInt32(0)});
+                        CI->eraseFromParent();
+                    } else if (Callee && Callee->getName().starts_with("llvm.memmove")) {
+                        IRBuilder<> Builder(CI);
+                        Value *Dst = CI->getArgOperand(0);
+                        Value *Src = CI->getArgOperand(1);
+                        Value *Len = CI->getArgOperand(2);
+
+                        Value *GDst = nullptr;
+                        Value *GSrc = nullptr;
+
+                        if (auto *MDDst = CI->getMetadata("go.grade.dst")) {
+                            GDst = cast<ValueAsMetadata>(cast<MDNode>(MDDst)->getOperand(0))->getValue();
+                        }
+                        if (auto *MDSrc = CI->getMetadata("go.grade.src")) {
+                            GSrc = cast<ValueAsMetadata>(cast<MDNode>(MDSrc)->getOperand(0))->getValue();
+                        }
+
+                        auto getTOP = [&]() {
+                             LLVMContext &Ctx = M.getContext();
+                             return ConstantStruct::get(cast<StructType>(GradeTy), {
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+                             });
+                        };
+
+                        if (!GDst) GDst = getTOP();
+                        if (!GSrc) GSrc = getTOP();
+
+                        // For now, treat memmove same as memcpy in the runtime hook but could distinguish
+                        Builder.CreateCall(MemcpyFn, {Dst, GDst, Src, GSrc, Len, Builder.getInt32(1)});
+                        CI->eraseFromParent();
+                    } else if (Callee && Callee->getName().starts_with("llvm.memset")) {
+                        IRBuilder<> Builder(CI);
+                        Value *Dst = CI->getArgOperand(0);
+                        Value *Val = CI->getArgOperand(1);
+                        Value *Len = CI->getArgOperand(2);
+
+                        Value *GDst = nullptr;
+                        if (auto *MDDst = CI->getMetadata("go.grade.dst")) {
+                            GDst = cast<ValueAsMetadata>(cast<MDNode>(MDDst)->getOperand(0))->getValue();
+                        }
+
+                        auto getTOP = [&]() {
+                             LLVMContext &Ctx = M.getContext();
+                             return ConstantStruct::get(cast<StructType>(GradeTy), {
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+                             });
+                        };
+
+                        if (!GDst) GDst = getTOP();
+
+                        Builder.CreateCall(MemsetFn, {Dst, GDst, Val, Len});
                         CI->eraseFromParent();
                     }
                 }

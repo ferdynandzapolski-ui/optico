@@ -17,6 +17,7 @@ pub enum CIROp {
     Call(String, Vec<CIROp>),
     Spawn(Box<CIROp>),
     Block(Vec<CIROp>),
+    ConstInt(i64),
     StructDecl(String, Vec<(String, Type)>), // RFC 001
     ResourceDecl(String, Type, Box<CIROp>),  // RFC 002
     ProtocolDecl(String, Vec<ProtocolState>),
@@ -44,6 +45,8 @@ impl CIRLowerer {
                 Decl::Global(name, _, val) => {
                     if let Some(v) = val {
                         ops.push(CIROp::Store(name.clone(), Box::new(Self::lower_expr(v))));
+                    } else {
+                        // For uninitialized globals, we could emit a placeholder
                     }
                 }
                 Decl::ExternC(decls) => {
@@ -64,6 +67,7 @@ impl CIRLowerer {
 
     pub fn lower_expr(expr: &Expr) -> CIROp {
         match expr {
+            Expr::LocalDecl(n, _, e) => CIROp::Store(n.clone(), Box::new(Self::lower_expr(e))),
             Expr::Var(n) => CIROp::Load(n.clone()),
             Expr::Next(e, clock) => CIROp::Next(Box::new(Self::lower_expr(e)), clock.clone()),
             Expr::Prev(e, clock) => CIROp::Prev(Box::new(Self::lower_expr(e)), clock.clone()),
@@ -74,6 +78,7 @@ impl CIRLowerer {
             Expr::Compose(e1, e2) => CIROp::Compose(Box::new(Self::lower_expr(e1)), Box::new(Self::lower_expr(e2))),
             Expr::Block(exprs) => CIROp::Block(exprs.iter().map(Self::lower_expr).collect()),
             Expr::Spawn(e) => CIROp::Spawn(Box::new(Self::lower_expr(e))),
+            Expr::ConstInt(v) => CIROp::ConstInt(*v),
             Expr::Call(e, args) => {
                 if let Expr::Var(n) = &**e {
                     CIROp::Call(n.clone(), args.iter().map(Self::lower_expr).collect())

@@ -75,10 +75,21 @@ go_grade_t __go_grade_from_malloc(void* p, size_t n) {
 }
 
 go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale) {
-    // Spatial safety: technically, object bounds don't change on GEP.
-    // However, if we wanted to enforce subobject bounds, we would tighten g.base/g.end here.
-    // In this MVP, we preserve object-level bounds for compatibility.
+    // In GOIR, GEP preserves the original object's bounds for spatial safety checks.
+    // We mark it as a subobject for diagnostic purposes.
     g.flags |= GO_BOUNDS_KIND_SUBOBJECT;
+    return g;
+}
+
+void __go_prov_expose(const void* p, go_grade_t g, uint32_t site) {
+    __go_trace_event(GO_EVENT_PROV_EXPOSE, p, g, "prov", "exposure", dummy_site);
+}
+
+go_grade_t __go_inttoptr_resolve(uint64_t i, uint32_t policy, uint32_t site) {
+    go_grade_t g = {0};
+    g.end = -1ULL;
+    g.perms = 0xF;
+    __go_trace_event(GO_EVENT_INTTOPTR_RESOLVE, (void*)(uintptr_t)i, g, "prov", "resolution", dummy_site);
     return g;
 }
 
@@ -124,5 +135,16 @@ void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind) {
     __go_check_store(dst, gdst, n);
     __go_check_load(src, gsrc, n);
-    memcpy(dst, src, n);
+
+    // In hybrid tier, we would propagate grades for pointers stored in this region
+    if (layout_kind == 1) { // Assume 1 means memmove or some layout hint
+         memmove(dst, src, n);
+    } else {
+         memcpy(dst, src, n);
+    }
+}
+
+void __go_memset(void* dst, go_grade_t gdst, uint8_t val, size_t n) {
+    __go_check_store(dst, gdst, n);
+    memset(dst, val, n);
 }
