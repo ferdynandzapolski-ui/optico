@@ -33,6 +33,17 @@ char lexer_advance(Lexer l) {
     }
 }
 
+void lexer_skip_comment(Lexer l) {
+    {
+        char c = lexer_advance(l);
+        if (c == '\n') {
+            0
+        } else {
+            lexer_skip_comment(l);
+        }
+    }
+}
+
 void lexer_skip_whitespace(Lexer l) {
     {
         char c = lexer_peek(l);
@@ -55,66 +66,20 @@ void lexer_skip_whitespace(Lexer l) {
     }
 }
 
-void lexer_skip_comment(Lexer l) {
+Token lexer_lex_string(Lexer l, int start) {
     {
         char c = lexer_advance(l);
-        if (c == '\n') {
-            0
+        if (c == '"') {
+            alloc<Token>(23, string_slice(l.input, start + 1, l.pos - 1), l.line)
         } else {
-            lexer_skip_comment(l);
-        }
-    }
-}
-
-Token lexer_next_token(Lexer l) {
-    {
-        lexer_skip_whitespace(l);
-        int start_pos = l.pos;
-        char c = lexer_advance(l);
-        if (l.pos > l.input.len) {
-            alloc<Token>(0, alloc<String>(0, alloc<char, Normal>(0)), l.line)
-        } else {
-            if (c == '{') { alloc<Token>(1, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '}') { alloc<Token>(2, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '(') { alloc<Token>(3, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == ')') { alloc<Token>(4, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '[') { alloc<Token>(5, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == ']') { alloc<Token>(6, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == ';') { alloc<Token>(7, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == ',') { alloc<Token>(8, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '.') { alloc<Token>(9, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '*') { alloc<Token>(10, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '+') { alloc<Token>(11, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '-') {
-                if (lexer_peek(l) == '>') {
-                    { lexer_advance(l); alloc<Token>(12, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
-                } else {
-                    alloc<Token>(13, alloc<String>(1, alloc<char, Normal>(1)), l.line)
+            if (c == '\\') {
+                {
+                    lexer_advance(l);
+                    lexer_lex_string(l, start);
                 }
             } else {
-            if (c == ':') {
-                if (lexer_peek(l) == '=') {
-                    { lexer_advance(l); alloc<Token>(14, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
-                } else {
-                    alloc<Token>(15, alloc<String>(1, alloc<char, Normal>(1)), l.line)
-                }
-            } else {
-            if (c == '|') { alloc<Token>(16, alloc<String>(1, alloc<char, Normal>(1)), l.line) } else {
-            if (c == '=') {
-                if (lexer_peek(l) == '=') {
-                    { lexer_advance(l); alloc<Token>(17, alloc<String>(2, alloc<char, Normal>(2)), l.line) }
-                } else {
-                    alloc<Token>(18, alloc<String>(1, alloc<char, Normal>(1)), l.line)
-                }
-            } else {
-            if (is_digit(c)) {
-                lexer_lex_number(l, start_pos)
-            } else {
-            if (is_alpha(c)) {
-                lexer_lex_ident(l, start_pos)
-            } else {
-                alloc<Token>(99, alloc<String>(1, alloc<char, Normal>(1)), l.line) // Error
-            }}}}}}}}}}}}}}}}}
+                lexer_lex_string(l, start);
+            }
         }
     }
 }
@@ -128,8 +93,43 @@ Token lexer_lex_number(Lexer l, int start) {
                 lexer_lex_number(l, start);
             }
         } else {
-            alloc<Token>(20, alloc<String>(l.pos - start, alloc<char, Normal>(l.pos - start)), l.line)
+            alloc<Token>(20, string_slice(l.input, start, l.pos), l.line)
         }
+    }
+}
+
+Token lexer_lex_keyword(String s, int line) {
+    {
+        if (string_equal(s, "int")) { return alloc<Token>(30, s, line); } else { 0 };
+        if (string_equal(s, "float")) { return alloc<Token>(31, s, line); } else { 0 };
+        if (string_equal(s, "bool")) { return alloc<Token>(32, s, line); } else { 0 };
+        if (string_equal(s, "char")) { return alloc<Token>(33, s, line); } else { 0 };
+        if (string_equal(s, "void")) { return alloc<Token>(34, s, line); } else { 0 };
+        if (string_equal(s, "struct")) { return alloc<Token>(35, s, line); } else { 0 };
+        if (string_equal(s, "resource")) { return alloc<Token>(36, s, line); } else { 0 };
+        if (string_equal(s, "protocol")) { return alloc<Token>(37, s, line); } else { 0 };
+        if (string_equal(s, "state")) { return alloc<Token>(38, s, line); } else { 0 };
+        if (string_equal(s, "extern")) { return alloc<Token>(39, s, line); } else { 0 };
+        if (string_equal(s, "traversal")) { return alloc<Token>(40, s, line); } else { 0 };
+        if (string_equal(s, "co")) { return alloc<Token>(41, s, line); } else { 0 };
+        if (string_equal(s, "optic")) { return alloc<Token>(42, s, line); } else { 0 };
+        if (string_equal(s, "rec")) { return alloc<Token>(43, s, line); } else { 0 };
+        if (string_equal(s, "atomic")) { return alloc<Token>(44, s, line); } else { 0 };
+        if (string_equal(s, "pointer")) { return alloc<Token>(45, s, line); } else { 0 };
+        if (string_equal(s, "next")) { return alloc<Token>(46, s, line); } else { 0 };
+        if (string_equal(s, "prev")) { return alloc<Token>(47, s, line); } else { 0 };
+        if (string_equal(s, "alloc")) { return alloc<Token>(48, s, line); } else { 0 };
+        if (string_equal(s, "free")) { return alloc<Token>(49, s, line); } else { 0 };
+        if (string_equal(s, "unsafe")) { return alloc<Token>(50, s, line); } else { 0 };
+        if (string_equal(s, "checked")) { return alloc<Token>(51, s, line); } else { 0 };
+        if (string_equal(s, "spawn")) { return alloc<Token>(52, s, line); } else { 0 };
+        if (string_equal(s, "if")) { return alloc<Token>(53, s, line); } else { 0 };
+        if (string_equal(s, "else")) { return alloc<Token>(54, s, line); } else { 0 };
+        if (string_equal(s, "return")) { return alloc<Token>(55, s, line); } else { 0 };
+        if (string_equal(s, "I")) { return alloc<Token>(56, s, line); } else { 0 };
+        if (string_equal(s, "true")) { return alloc<Token>(57, s, line); } else { 0 };
+        if (string_equal(s, "false")) { return alloc<Token>(58, s, line); } else { 0 };
+        alloc<Token>(21, s, line)
     }
 }
 
@@ -142,7 +142,96 @@ Token lexer_lex_ident(Lexer l, int start) {
                 lexer_lex_ident(l, start);
             }
         } else {
-            alloc<Token>(21, alloc<String>(l.pos - start, alloc<char, Normal>(l.pos - start)), l.line)
+            lexer_lex_keyword(string_slice(l.input, start, l.pos), l.line)
         }
+    }
+}
+
+Token lexer_next_token(Lexer l) {
+    {
+        lexer_skip_whitespace(l);
+        int start_pos = l.pos;
+        char c = lexer_advance(l);
+        if (l.pos > l.input.len) {
+            return alloc<Token>(0, string_slice(l.input, 0, 0), l.line);
+        } else { 0 };
+
+        if (c == '{') { return alloc<Token>(1, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '}') { return alloc<Token>(2, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '(') { return alloc<Token>(3, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == ')') { return alloc<Token>(4, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '[') { return alloc<Token>(5, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == ']') { return alloc<Token>(6, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == ';') { return alloc<Token>(7, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == ',') { return alloc<Token>(8, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '.') { return alloc<Token>(9, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '*') { return alloc<Token>(10, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '+') { return alloc<Token>(11, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '-') {
+            {
+                if (lexer_peek(l) == '>') {
+                    { lexer_advance(l); return alloc<Token>(12, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(13, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+        if (c == ':') {
+            {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); return alloc<Token>(14, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(15, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+        if (c == '|') { return alloc<Token>(16, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '=') {
+            {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); return alloc<Token>(17, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(18, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+        if (c == '@') { return alloc<Token>(19, string_slice(l.input, start_pos, l.pos), l.line); } else { 0 };
+        if (c == '!') {
+            {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); return alloc<Token>(24, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(22, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+        if (c == '"') { return lexer_lex_string(l, start_pos); } else { 0 };
+        if (c == '<') {
+            {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); return alloc<Token>(25, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(26, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+        if (c == '>') {
+            {
+                if (lexer_peek(l) == '=') {
+                    { lexer_advance(l); return alloc<Token>(27, string_slice(l.input, start_pos, l.pos), l.line); }
+                } else {
+                    return alloc<Token>(28, string_slice(l.input, start_pos, l.pos), l.line);
+                }
+            }
+        } else { 0 };
+
+        if (is_digit(c)) {
+            return lexer_lex_number(l, start_pos);
+        } else { 0 };
+        if (is_alpha(c)) {
+            return lexer_lex_ident(l, start_pos);
+        } else { 0 };
+
+        alloc<Token>(99, string_slice(l.input, start_pos, l.pos), l.line)
     }
 }

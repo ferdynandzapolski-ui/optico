@@ -20,6 +20,28 @@ bool string_equal(String s1, String s2) {
     }
 }
 
+String string_slice(String s, int start, int end) {
+    {
+        int new_len = end - start;
+        if (new_len < 0) {
+            new_len = 0;
+        } else { 0 };
+        pointer<char, Normal> new_data = alloc<char, Normal>(new_len);
+        string_copy_rec(new_data, s.data + start, new_len, 0, 0);
+        alloc<String>(new_len, new_data)
+    }
+}
+
+String string_push_char(String s, char c) {
+    {
+        int new_len = s.len + 1;
+        pointer<char, Normal> new_data = alloc<char, Normal>(new_len);
+        string_copy_rec(new_data, s.data, s.len, 0, 0);
+        new_data[s.len] := c;
+        alloc<String>(new_len, new_data)
+    }
+}
+
 String string_concat(String s1, String s2) {
     {
         int new_len = s1.len + s2.len;

@@ -70,3 +70,11 @@ pointer<Unit, Heap> ptr_vector_pop(PtrVector v) {
 void ptr_vector_clear(PtrVector v) {
     v.size := 0;
 }
+
+int ptr_vector_size(PtrVector v) {
+    v.size
+}
+
+bool ptr_vector_empty(PtrVector v) {
+    v.size == 0
+}
