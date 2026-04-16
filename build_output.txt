@@ -1,3 +1,6 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/app std/prelude.oco std/string.oco std/vector.oco std/ptr_vector.oco std/io.oco std/list.oco std/map.oco std/net.oco std/ir/node.oco std/ir/symbol.oco std/ir/type.oco std/compiler/lexer.oco std/compiler/parser.oco`
+--- OptiCo CIR for std/compiler/parser.oco ---
 struct Unit {
 }
 struct Pair {
@@ -35,8 +38,8 @@ struct Token {
 struct ASTNode {
   Int tag;
   Int value;
-  RecOptic(Optic(Named("ASTNode"), None, None), None, None) left;
-  RecOptic(Optic(Named("ASTNode"), None, None), None, None) right;
+  RecOptic(Optic(Named("ASTNode"), None, None, None), None, None, None) left;
+  RecOptic(Optic(Named("ASTNode"), None, None, None), None, None, None) right;
 }
 block {
   load o
@@ -88,6 +91,34 @@ block {
 block {
   block {
   }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  call string_to_int_rec (
+    block {
+    },
+    block {
+    },
+    block {
+    },
+    block {
+    },
+  )
 }
 block {
   block {
@@ -212,6 +243,55 @@ block {
   block {
   }
 }
+call malloc_int (
+)
+call free_int (
+)
+struct Vector {
+  Int size;
+  Int capacity;
+  Pointer(Int, "Heap", None) data;
+}
+block {
+  alloc<Named("Vector"), None> (
+    block {
+    },
+    load cap,
+    call malloc_int (
+      block {
+      },
+    ),
+  )
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  put (
+    block {
+    }  ,
+    load val  )
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  put (
+    block {
+    }  ,
+    block {
+    }  )
+}
 call malloc_ptr (
 )
 call free_ptr (
@@ -268,6 +348,214 @@ block {
 block {
   block {
   }
+}
+protocol File {
+  state Open {
+    Optic(Optic(Int, None, None, None), None, None, None) read;
+    Optic(Optic(Int, None, None, None), None, None, None) write;
+  }
+  state Closed {
+  }
+}
+struct FileObj {
+  Int fd;
+}
+struct Console {
+  Int id;
+}
+resource Named("Console") console = (
+  alloc<Named("Console"), None> (
+    block {
+    },
+  ))
+block {
+}
+block {
+}
+block {
+  block {
+  }
+}
+block {
+}
+block {
+}
+block {
+  alloc<Named("FileObj"), None> (
+    block {
+    },
+  )
+}
+block {
+  put (
+    load closer  ,
+    block {
+    }  )
+}
+struct ListNode {
+  Int val;
+  Optic(Optic(Named("ListNode"), None, None, None), None, None, None) next;
+}
+struct List {
+  Optic(Optic(Named("ListNode"), None, None, None), None, None, None) head;
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+struct MapEntry {
+  Int key;
+  Int value;
+}
+struct MapNode {
+  Named("MapEntry") entry;
+  Optic(Optic(Named("MapNode"), None, None, None), None, None, None) next;
+}
+struct Map {
+  Optic(Optic(Named("MapNode"), None, None, None), None, None, None) head;
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+struct ByteBuf {
+  Int capacity;
+  Int size;
+  Pointer(Char, "Heap", None) data;
+}
+struct TlsState {
+  Int version;
+  Int handshake_complete;
+  Int session_id;
+}
+struct HttpState {
+  Int method;
+  Int status;
+  Int keep_alive;
+}
+struct HttpConnection {
+  Named("ByteBuf") in_buffer;
+  Named("ByteBuf") out_buffer;
+  Named("TlsState") tls;
+  Named("HttpState") http;
+}
+block {
+  load conn
+}
+block {
+  load conn
+}
+block {
+  block {
+  }
+  block {
+  }
+  block {
+  }
+  block {
+  }
+  get (
+    load pipeline  )
+}
+struct Node {
+  Int id;
+  Int kind;
+  Named("String") lexeme;
+  Named("PtrVector") children;
+  Optic(Optic(Named("Node"), None, None, None), None, None, None) parent;
+  Optic(Optic(Named("Node"), None, None, None), None, None, None) next;
+  Named("String") source_file;
+  Int line_number;
+}
+protocol NodeSession {
+  state Parsed {
+    Optic(Optic(Named("Symbol"), None, None, None), None, None, None) resolve;
+  }
+  state Resolved {
+    Optic(Optic(Named("Type"), None, None, None), None, None, None) typecheck;
+  }
+  state Typed {
+    Optic(Optic(Named("IR"), None, None, None), None, None, None) lower;
+  }
+  state Lowered {
+  }
+}
+block {
+  block {
+    block {
+    }
+    load s
+  }
+}
+block {
+  block {
+    block {
+    }
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    load t
+  }
+}
+block {
+  block {
+    block {
+    }
+    load ir
+  }
+}
+struct Symbol {
+  Named("String") name;
+  Int scope_id;
+  Pointer(Named("Unit"), "Heap", None) node_ref;
+}
+struct SymbolTable {
+  Named("PtrVector") symbols;
+}
+block {
+  alloc<Named("SymbolTable"), None> (
+    call ptr_vector_new (
+      block {
+      },
+    ),
+  )
+}
+block {
+  call ptr_vector_push (
+    block {
+    },
+    load sym,
+  )
+}
+struct TypeIR {
+  Named("String") kind;
+  Int size;
+  Named("PtrVector") params;
+}
+struct IR {
+  Int opcode;
+  Int value;
+  Named("PtrVector") inputs;
 }
 struct Token {
   Int tag;
@@ -328,6 +616,42 @@ block {
 }
 block {
   block {
+    block {
+    }
+    block {
+    }
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    block {
+    }
     block {
     }
     block {
@@ -407,6 +731,10 @@ block {
     call lexer_skip_whitespace (
       load l,
     )
+    block {
+    }
+    block {
+    }
     block {
     }
     block {
@@ -537,6 +865,22 @@ block {
 }
 block {
   block {
+    block {
+    }
+    block {
+    }
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+  }
+}
+block {
+  block {
   }
 }
 block {
@@ -653,7 +997,112 @@ block {
 }
 block {
   block {
+    call parser_advance (
+      load p,
+    )
+    call parser_advance (
+      load p,
+    )
+    call parser_expect (
+      load p,
+      block {
+      },
+    )
+    block {
+    }
+    call parser_parse_extern_decls (
+      load p,
+      load decls,
+    )
+    call parser_expect (
+      load p,
+      block {
+      },
+    )
+    alloc<Named("Node"), None> (
+      block {
+      },
+      block {
+      },
+      call string_slice (
+        block {
+        },
+        block {
+        },
+        block {
+        },
+      ),
+      load decls,
+      block {
+      },
+      block {
+      },
+      call string_slice (
+        block {
+        },
+        block {
+        },
+        block {
+        },
+      ),
+      block {
+      },
+    )
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
     block {
     }
   }
 }
+block {
+  block {
+  }
+}
+block {
+  block {
+    block {
+    }
+    call parser_parse_program_decls (
+      load p,
+      load decls,
+    )
+    alloc<Named("Node"), None> (
+      block {
+      },
+      block {
+      },
+      call string_slice (
+        block {
+        },
+        block {
+        },
+        block {
+        },
+      ),
+      load decls,
+      block {
+      },
+      block {
+      },
+      call string_slice (
+        block {
+        },
+        block {
+        },
+        block {
+        },
+      ),
+      block {
+      },
+    )
+  }
+}
+
+
+--- Driving GOIR Compilation Pipeline ---

@@ -80,7 +80,22 @@ The standard library (`std/`) must provide the base implementations for these no
 | `Type` | `std/ir/type.oco` | Type system representation supporting parameterized types. |
 | `PtrVector` | `std/ptr_vector.oco` | Core collection for managing IR node pointers. |
 
-## 5. Summary
+## 5. Implementation Status (Self-Hosting)
+
+The following components have been implemented in the self-hosted standard library to support the bootstrap process:
+
+- **Lexer (`std/compiler/lexer.oco`):** Full keyword support for OptiCo v0.3, including `PerfGrade`, `extern "C"`, and coinductive `rec optic`. Supports character and string literals with escape sequences.
+- **Parser (`std/compiler/parser.oco`):** Implements `parser_parse_program` as the entry point. Supports `extern "C"` blocks, nested struct/protocol declarations, and standard expression precedence (additive/multiplicative).
+- **IR Core (`std/ir/`):** Implements `NodeSession` protocol transitions (`resolve`, `typecheck`, `lower`). Includes `SymbolTable` management for scope resolution.
+- **Standard Library:** Core data structures (`String`, `Vector`, `PtrVector`, `List`, `Map`) and I/O abstractions (`File`, `Console`) are fully defined and compatible with the Rust-based bootstrap compiler.
+
+### Issues Encountered & Resolved
+
+1. **Tag Collision:** Initial lexer implementation had overlapping tags for some operators. Re-aligned tags with the Rust compiler's internal `Token` enum mapping for consistency.
+2. **Recursive Descent in OCO:** Due to the linear nature of resource management in OptiCo, some recursive parsing patterns required explicit state passing. Resolved by utilizing comonadic focus on `Parser` state.
+3. **Symbol Table Persistence:** Early designs for `SymbolTable` were volatile. Integrated `PtrVector` for durable symbol storage to support incremental stability (Red-Green algorithm).
+
+## 6. Summary
 
 By treating the compiler as a self-querying graph, OptiCo achieves:
 1. **Phase Safety:** Queries fail at compile-time if the IR hasn't reached the required state.
