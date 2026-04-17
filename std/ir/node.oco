@@ -9,6 +9,8 @@ struct Node {
     optic Node* next;
     String source_file;
     int line_number;
+    Fingerprint fingerprint;
+    int durability; // 0: Volatile, 1: Normal, 2: Durable
 }
 
 // NodeSession protocol for phase management
@@ -17,7 +19,7 @@ protocol NodeSession {
         optic Symbol* resolve;   // Transitions Parsed -> Resolved
     }
     state Resolved {
-        optic Type* typecheck;   // Transitions Resolved -> Typed
+        optic TypeIR* typecheck;   // Transitions Resolved -> Typed
     }
     state Typed {
         optic IR* lower;         // Transitions Typed -> Lowered
@@ -25,17 +27,21 @@ protocol NodeSession {
     state Lowered {}
 }
 
+Fingerprint node_empty_fingerprint() {
+    alloc<Fingerprint>(0, 0)
+}
+
 Symbol* resolve(Node* n) {
     // Placeholder for symbol resolution logic
-    alloc<Symbol>(n.lexeme, 0, n)
+    alloc<Symbol>(n.lexeme, 0, n, node_empty_fingerprint())
 }
 
 TypeIR* typecheck(Node* n) {
     // Placeholder for type checking logic
-    alloc<TypeIR>(alloc<String>(0, alloc<char, Normal>(0)), 0, ptr_vector_new(0))
+    alloc<TypeIR>(alloc<String>(0, alloc<char, Normal>(0)), 0, ptr_vector_new(0), node_empty_fingerprint())
 }
 
 IR* lower(Node* n) {
     // Placeholder for lowering logic
-    alloc<IR>(0, 0, ptr_vector_new(0))
+    alloc<IR>(0, 0, ptr_vector_new(0), node_empty_fingerprint())
 }

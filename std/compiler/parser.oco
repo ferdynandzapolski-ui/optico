@@ -18,13 +18,17 @@ void parser_expect(Parser p, int tag) {
     }
 }
 
+Node* parser_make_node(int kind, String lexeme, PtrVector children, Parser p) {
+    alloc<Node>(0, kind, lexeme, children, 0, 0, p.lexer.source_file, p.lexer.line, node_empty_fingerprint(), 1)
+}
+
 Node* parser_parse_type(Parser p) {
     {
         String name = p.current.lexeme;
         int tag = p.current.tag;
         parser_advance(p);
 
-        Node* ty = alloc<Node>(5, tag, name, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0);
+        Node* ty = parser_make_node(5, name, ptr_vector_new(0), p);
 
         // Handle pointer/optic stars
         if (p.current.tag == 10) { // Star
@@ -32,7 +36,7 @@ Node* parser_parse_type(Parser p) {
                 parser_advance(p);
                 PtrVector children = ptr_vector_new(1);
                 ptr_vector_push(children, ty);
-                ty := alloc<Node>(6, 0, string_slice("*", 0, 1), children, 0, 0, string_slice("", 0, 0), 0);
+                ty := parser_make_node(6, string_slice("*", 0, 1), children, p);
             }
         } else { 0 };
 
@@ -46,14 +50,14 @@ Node* parser_parse_primary(Parser p) {
             {
                 String lex = p.current.lexeme;
                 parser_advance(p);
-                alloc<Node>(10, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                parser_make_node(10, lex, ptr_vector_new(0), p)
             }
         } else {
             if (p.current.tag == 21) { // Ident
                 {
                     String lex = p.current.lexeme;
                     parser_advance(p);
-                    alloc<Node>(11, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                    parser_make_node(11, lex, ptr_vector_new(0), p)
                 }
             } else {
                 if (p.current.tag == 3) { // LParen
@@ -70,10 +74,10 @@ Node* parser_parse_primary(Parser p) {
                             PtrVector stmts = ptr_vector_new(4);
                             parser_parse_block_stmts(p, stmts);
                             parser_expect(p, 2); // RBrace
-                            alloc<Node>(20, 0, string_slice("", 0, 0), stmts, 0, 0, string_slice("", 0, 0), 0)
+                            parser_make_node(20, string_slice("", 0, 0), stmts, p)
                         }
                     } else {
-                        alloc<Node>(99, 0, string_slice("", 0, 0), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                        parser_make_node(99, string_slice("", 0, 0), ptr_vector_new(0), p)
                     }
                 }
             }
@@ -105,7 +109,7 @@ Node* parser_parse_postfix(Parser p) {
                 parser_advance(p);
                 PtrVector children = ptr_vector_new(1);
                 ptr_vector_push(children, e);
-                alloc<Node>(12, 0, field, children, 0, 0, string_slice("", 0, 0), 0)
+                parser_make_node(12, field, children, p)
             }
         } else {
             if (p.current.tag == 3) { // Call LParen
@@ -117,9 +121,9 @@ Node* parser_parse_postfix(Parser p) {
                     PtrVector children = ptr_vector_new(2);
                     ptr_vector_push(children, e);
 
-                    Node* args_node = alloc<Node>(16, 0, string_slice("args", 0, 4), args, 0, 0, string_slice("", 0, 0), 0);
+                    Node* args_node = parser_make_node(16, string_slice("args", 0, 4), args, p);
                     ptr_vector_push(children, args_node);
-                    alloc<Node>(15, 0, string_slice("call", 0, 4), children, 0, 0, string_slice("", 0, 0), 0)
+                    parser_make_node(15, string_slice("call", 0, 4), children, p)
                 }
             } else {
                 e
@@ -152,7 +156,7 @@ Node* parser_parse_expr(Parser p) {
                 PtrVector children = ptr_vector_new(2);
                 ptr_vector_push(children, e);
                 ptr_vector_push(children, right);
-                alloc<Node>(13, 0, string_slice("+", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                parser_make_node(13, string_slice("+", 0, 1), children, p)
             }
         } else {
             if (p.current.tag == 18) { // Assign
@@ -162,7 +166,7 @@ Node* parser_parse_expr(Parser p) {
                     PtrVector children = ptr_vector_new(2);
                     ptr_vector_push(children, e);
                     ptr_vector_push(children, val);
-                    alloc<Node>(14, 0, string_slice("=", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                    parser_make_node(14, string_slice("=", 0, 1), children, p)
                 }
             } else {
                 e
@@ -180,7 +184,7 @@ void parser_parse_struct_fields(Parser p, PtrVector fields) {
             parser_expect(p, 7); // Semi
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(fields, alloc<Node>(32, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(fields, parser_make_node(32, name, children, p));
             parser_parse_struct_fields(p, fields);
         }
     } else {
@@ -197,7 +201,7 @@ Node* parser_parse_struct(Parser p) {
         PtrVector fields = ptr_vector_new(4);
         parser_parse_struct_fields(p, fields);
         parser_expect(p, 2); // RBrace
-        alloc<Node>(30, 0, name, fields, 0, 0, string_slice("", 0, 0), 0)
+        parser_make_node(30, name, fields, p)
     }
 }
 
@@ -211,7 +215,7 @@ void parser_parse_protocol_states(Parser p, PtrVector states) {
             PtrVector optics = ptr_vector_new(4);
             parser_parse_state_optics(p, optics);
             parser_expect(p, 2); // RBrace
-            ptr_vector_push(states, alloc<Node>(33, 0, name, optics, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(states, parser_make_node(33, name, optics, p));
             parser_parse_protocol_states(p, states);
         }
     } else {
@@ -228,7 +232,7 @@ void parser_parse_state_optics(Parser p, PtrVector optics) {
             parser_expect(p, 7); // Semi
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(optics, alloc<Node>(34, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(optics, parser_make_node(34, name, children, p));
             parser_parse_state_optics(p, optics);
         }
     } else {
@@ -245,7 +249,7 @@ Node* parser_parse_protocol(Parser p) {
         PtrVector states = ptr_vector_new(2);
         parser_parse_protocol_states(p, states);
         parser_expect(p, 2); // RBrace
-        alloc<Node>(31, 0, name, states, 0, 0, string_slice("", 0, 0), 0)
+        parser_make_node(31, name, states, p)
     }
 }
 
@@ -258,7 +262,7 @@ void parser_parse_params(Parser p, PtrVector params) {
 
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(params, alloc<Node>(35, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(params, parser_make_node(35, name, children, p));
 
             if (p.current.tag == 8) { // Comma
                 {
@@ -293,16 +297,16 @@ Node* parser_parse_decl(Parser p) {
                             PtrVector children = ptr_vector_new(3);
                             ptr_vector_push(children, ty);
 
-                            Node* params_node = alloc<Node>(36, 0, string_slice("params", 0, 6), params, 0, 0, string_slice("", 0, 0), 0);
+                            Node* params_node = parser_make_node(36, string_slice("params", 0, 6), params, p);
                             ptr_vector_push(children, params_node);
                             ptr_vector_push(children, body);
-                            alloc<Node>(1, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+                            parser_make_node(1, name, children, p)
                         }
                     } else {
                         {
                             PtrVector children = ptr_vector_new(1);
                             ptr_vector_push(children, ty);
-                            alloc<Node>(2, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+                            parser_make_node(2, name, children, p)
                         }
                     }
                 }

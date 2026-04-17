@@ -35,8 +35,8 @@ struct Token {
 struct ASTNode {
   Int tag;
   Int value;
-  RecOptic(Optic(Named("ASTNode"), None, None), None, None) left;
-  RecOptic(Optic(Named("ASTNode"), None, None), None, None) right;
+  RecOptic(Optic(Named("ASTNode"), None, None, None), None, None, None) left;
+  RecOptic(Optic(Named("ASTNode"), None, None, None), None, None, None) right;
 }
 block {
   load o
@@ -68,6 +68,137 @@ block {
 block {
   block {
   }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+    block {
+    }
+    call string_copy_rec (
+      load new_data,
+      block {
+      },
+      load new_len,
+      block {
+      },
+      block {
+      },
+    )
+    alloc<Named("String"), None> (
+      load new_len,
+      load new_data,
+    )
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+    call string_copy_rec (
+      load new_data,
+      block {
+      },
+      block {
+      },
+      block {
+      },
+      block {
+      },
+    )
+    put (
+      block {
+      }    ,
+      load c    )
+    alloc<Named("String"), None> (
+      load new_len,
+      load new_data,
+    )
+  }
+}
+block {
+  block {
+    block {
+    }
+    block {
+    }
+    call string_copy_rec (
+      load new_data,
+      block {
+      },
+      block {
+      },
+      block {
+      },
+      block {
+      },
+    )
+    call string_copy_rec (
+      load new_data,
+      block {
+      },
+      block {
+      },
+      block {
+      },
+      block {
+      },
+    )
+    alloc<Named("String"), None> (
+      load new_len,
+      load new_data,
+    )
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  call string_compare_rec (
+    block {
+    },
+    block {
+    },
+    block {
+    },
+    block {
+    },
+    block {
+    },
+  )
 }
 block {
   block {

@@ -78,3 +78,21 @@ int ptr_vector_size(PtrVector v) {
 bool ptr_vector_empty(PtrVector v) {
     v.size == 0
 }
+
+void ptr_vector_remove(PtrVector v, int index) {
+    if (index < v.size) {
+        {
+            ptr_vector_shift_rec(v.data, index, v.size - 1);
+            v.size := v.size - 1;
+        }
+    } else { 0 }
+}
+
+void ptr_vector_shift_rec(pointer<pointer<Unit, Heap>, Heap> data, int i, int last) {
+    if (i < last) {
+        {
+            data[i] := data[i + 1];
+            ptr_vector_shift_rec(data, i + 1, last);
+        }
+    } else { 0 }
+}

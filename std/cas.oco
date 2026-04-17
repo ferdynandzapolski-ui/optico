@@ -1,0 +1,53 @@
+// std/cas.oco - Content-Addressable Storage for OptiCo v0.3
+
+struct CAS {
+    PtrVector entries;
+}
+
+struct CASEntry {
+    Fingerprint fingerprint;
+    pointer<Unit, Heap> data;
+}
+
+Fingerprint cas_fingerprint(String s) {
+    {
+        // Simple mock fingerprinting logic
+        int hi = s.len;
+        int lo = 0;
+        if (s.len > 0) {
+            lo := char_to_int(string_at(s, 0));
+        } else { 0 };
+        alloc<Fingerprint>(hi, lo)
+    }
+}
+
+CAS cas_new() {
+    alloc<CAS>(ptr_vector_new(16))
+}
+
+void cas_store(CAS c, Fingerprint fp, pointer<Unit, Heap> data) {
+    ptr_vector_push(c.entries, alloc<CASEntry>(fp, data))
+}
+
+pointer<Unit, Heap> cas_fetch(CAS c, Fingerprint fp) {
+    cas_fetch_rec(c.entries, fp, 0)
+}
+
+pointer<Unit, Heap> cas_fetch_rec(PtrVector entries, Fingerprint fp, int i) {
+    if (i < ptr_vector_size(entries)) {
+        {
+            CASEntry* entry = ptr_vector_get(entries, i);
+            if (entry->fingerprint.hi == fp.hi) {
+                if (entry->fingerprint.lo == fp.lo) {
+                    entry->data
+                } else {
+                    cas_fetch_rec(entries, fp, i + 1)
+                }
+            } else {
+                cas_fetch_rec(entries, fp, i + 1)
+            }
+        }
+    } else {
+        0
+    }
+}

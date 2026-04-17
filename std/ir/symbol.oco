@@ -4,4 +4,5 @@ struct Symbol {
     String name;
     int scope_id;
     pointer<Unit, Heap> node_ref;
+    Fingerprint fingerprint;
 }
