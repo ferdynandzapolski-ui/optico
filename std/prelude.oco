@@ -7,6 +7,11 @@ struct Pair {
     int snd;
 }
 
+struct Fingerprint {
+    int hi;
+    int lo;
+}
+
 struct OptionInt {
     int tag; // 0 for None, 1 for Some
     int value;
@@ -73,6 +78,11 @@ int unwrap(OptionInt o) {
 
 int is_ok(ResultInt r) {
     r.tag
+}
+
+int char_to_int(char c) {
+    // intrinsic/cast
+    c
 }
 
 bool is_digit(char c) {

@@ -8,10 +8,19 @@ The prelude defines basic types and common optics.
 ### Structs
 - `struct Unit {}`: An empty struct representing a unit type.
 - `struct Pair { int fst; int snd; }`: A simple container for two integer values.
+- `struct Fingerprint { int hi; int lo; }`: 128-bit Content-Addressable identifier.
 
 ### Optics
 - `optic int* left(optic Pair* p)`: Focuses on the first element of a `Pair`.
 - `optic int* right(optic Pair* p)`: Focuses on the second element of a `Pair`.
+
+## Content-Addressable Storage (`std/cas.oco`)
+Provides the base for the Zero-Copy CAS system.
+
+### Functions
+- `Fingerprint cas_fingerprint(String s)`: Generates a stable fingerprint for a string.
+- `void cas_store(CAS c, Fingerprint fp, pointer<Unit, Heap> data)`: Stores data associated with a fingerprint.
+- `pointer<Unit, Heap> cas_fetch(CAS c, Fingerprint fp)`: Retrieves data by its fingerprint.
 
 ## I/O and System Resources (`std/io.oco`)
 The I/O module handles interaction with the system.
@@ -31,10 +40,12 @@ The I/O module handles interaction with the system.
 ### PtrVector (`std/ptr_vector.oco`)
 - `PtrVector ptr_vector_new(int cap)`: Creates a new pointer vector with initial capacity.
 - `void ptr_vector_push(PtrVector v, pointer<Unit, Heap> val)`: Pushes a pointer onto the vector, resizing if necessary.
+- `void ptr_vector_remove(PtrVector v, int index)`: Removes an element and shifts subsequent elements.
 
 ### Vector (`std/vector.oco`)
 - `Vector vector_new(int cap)`: Creates a new integer vector.
 - `void vector_push(Vector v, int val)`: Pushes an integer onto the vector, resizing if necessary.
+- `bool vector_contains(Vector v, int val)`: Checks if a value exists in the vector.
 
 ## Compiler IR Components (`std/ir/`)
 To support the graph-based IR model, the library provides standard structures and protocols for compiler phases.
@@ -42,12 +53,12 @@ To support the graph-based IR model, the library provides standard structures an
 ### Protocols
 - `protocol NodeSession`: Defines the sequence `Parsed -> Resolved -> Typed -> Lowered` for IR nodes.
 - `state Parsed { optic Symbol* resolve; }`: Focuses on the resolver to reach the `Resolved` state.
-- `state Resolved { optic Type* typecheck; }`: Focuses on type analysis to reach the `Typed` state.
+- `state Resolved { optic TypeIR* typecheck; }`: Focuses on type analysis to reach the `Typed` state.
 
 ### Structs
-- `struct Node { int id; SourceLoc loc; }`: The base carrier for AST information.
-- `struct Symbol { string name; int scope_id; }`: Represents a resolved symbol.
-- `struct Type { string kind; int size; }`: Represents a verified type.
+- `struct Node { int id; int kind; String lexeme; PtrVector children; ... Fingerprint fingerprint; int durability; }`: The base carrier for AST information.
+- `struct Symbol { String name; ... Fingerprint fingerprint; }`: Represents a resolved symbol.
+- `struct TypeIR { String kind; ... Fingerprint fingerprint; }`: Represents a verified type.
 
 ## Interoperability Support (`std/interop.oco`)
 Supports legacy C integration through Pointer Lifting and `C_context`.

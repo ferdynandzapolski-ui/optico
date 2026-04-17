@@ -70,3 +70,19 @@ int vector_pop(Vector v) {
 void vector_clear(Vector v) {
     v.size := 0;
 }
+
+bool vector_contains(Vector v, int val) {
+    vector_contains_rec(v, val, 0)
+}
+
+bool vector_contains_rec(Vector v, int val, int i) {
+    if (i < v.size) {
+        if (v.data[i] == val) {
+            true
+        } else {
+            vector_contains_rec(v, val, i + 1)
+        }
+    } else {
+        false
+    }
+}
