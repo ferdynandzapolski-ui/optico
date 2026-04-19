@@ -24,7 +24,7 @@ Node* parser_parse_type(Parser p) {
         int tag = p.current.tag;
         parser_advance(p);
 
-        Node* ty = alloc<Node>(5, tag, name, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0);
+        Node* ty = alloc<Node>(5, tag, name, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1);
 
         // Handle pointer/optic stars
         if (p.current.tag == 10) { // Star
@@ -32,7 +32,7 @@ Node* parser_parse_type(Parser p) {
                 parser_advance(p);
                 PtrVector children = ptr_vector_new(1);
                 ptr_vector_push(children, ty);
-                ty := alloc<Node>(6, 0, string_slice("*", 0, 1), children, 0, 0, string_slice("", 0, 0), 0);
+                ty := alloc<Node>(6, 0, string_slice("*", 0, 1), children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1);
             }
         } else { 0 };
 
@@ -46,14 +46,14 @@ Node* parser_parse_primary(Parser p) {
             {
                 String lex = p.current.lexeme;
                 parser_advance(p);
-                alloc<Node>(10, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                alloc<Node>(10, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
             }
         } else {
             if (p.current.tag == 21) { // Ident
                 {
                     String lex = p.current.lexeme;
                     parser_advance(p);
-                    alloc<Node>(11, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                    alloc<Node>(11, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
                 }
             } else {
                 if (p.current.tag == 3) { // LParen
@@ -70,10 +70,10 @@ Node* parser_parse_primary(Parser p) {
                             PtrVector stmts = ptr_vector_new(4);
                             parser_parse_block_stmts(p, stmts);
                             parser_expect(p, 2); // RBrace
-                            alloc<Node>(20, 0, string_slice("", 0, 0), stmts, 0, 0, string_slice("", 0, 0), 0)
+                            alloc<Node>(20, 0, string_slice("", 0, 0), stmts, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
                         }
                     } else {
-                        alloc<Node>(99, 0, string_slice("", 0, 0), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                        alloc<Node>(99, 0, string_slice("", 0, 0), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
                     }
                 }
             }
@@ -105,7 +105,7 @@ Node* parser_parse_postfix(Parser p) {
                 parser_advance(p);
                 PtrVector children = ptr_vector_new(1);
                 ptr_vector_push(children, e);
-                alloc<Node>(12, 0, field, children, 0, 0, string_slice("", 0, 0), 0)
+                alloc<Node>(12, 0, field, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
             }
         } else {
             if (p.current.tag == 3) { // Call LParen
@@ -117,9 +117,9 @@ Node* parser_parse_postfix(Parser p) {
                     PtrVector children = ptr_vector_new(2);
                     ptr_vector_push(children, e);
 
-                    Node* args_node = alloc<Node>(16, 0, string_slice("args", 0, 4), args, 0, 0, string_slice("", 0, 0), 0);
+                    Node* args_node = alloc<Node>(16, 0, string_slice("args", 0, 4), args, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1);
                     ptr_vector_push(children, args_node);
-                    alloc<Node>(15, 0, string_slice("call", 0, 4), children, 0, 0, string_slice("", 0, 0), 0)
+                    alloc<Node>(15, 0, string_slice("call", 0, 4), children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
                 }
             } else {
                 e
@@ -152,7 +152,7 @@ Node* parser_parse_expr(Parser p) {
                 PtrVector children = ptr_vector_new(2);
                 ptr_vector_push(children, e);
                 ptr_vector_push(children, right);
-                alloc<Node>(13, 0, string_slice("+", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                alloc<Node>(13, 0, string_slice("+", 0, 1), children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
             }
         } else {
             if (p.current.tag == 18) { // Assign
@@ -162,7 +162,7 @@ Node* parser_parse_expr(Parser p) {
                     PtrVector children = ptr_vector_new(2);
                     ptr_vector_push(children, e);
                     ptr_vector_push(children, val);
-                    alloc<Node>(14, 0, string_slice("=", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                    alloc<Node>(14, 0, string_slice("=", 0, 1), children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
                 }
             } else {
                 e
@@ -180,7 +180,7 @@ void parser_parse_struct_fields(Parser p, PtrVector fields) {
             parser_expect(p, 7); // Semi
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(fields, alloc<Node>(32, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(fields, alloc<Node>(32, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1));
             parser_parse_struct_fields(p, fields);
         }
     } else {
@@ -197,7 +197,7 @@ Node* parser_parse_struct(Parser p) {
         PtrVector fields = ptr_vector_new(4);
         parser_parse_struct_fields(p, fields);
         parser_expect(p, 2); // RBrace
-        alloc<Node>(30, 0, name, fields, 0, 0, string_slice("", 0, 0), 0)
+        alloc<Node>(30, 0, name, fields, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
     }
 }
 
@@ -211,7 +211,7 @@ void parser_parse_protocol_states(Parser p, PtrVector states) {
             PtrVector optics = ptr_vector_new(4);
             parser_parse_state_optics(p, optics);
             parser_expect(p, 2); // RBrace
-            ptr_vector_push(states, alloc<Node>(33, 0, name, optics, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(states, alloc<Node>(33, 0, name, optics, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1));
             parser_parse_protocol_states(p, states);
         }
     } else {
@@ -228,7 +228,7 @@ void parser_parse_state_optics(Parser p, PtrVector optics) {
             parser_expect(p, 7); // Semi
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(optics, alloc<Node>(34, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(optics, alloc<Node>(34, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1));
             parser_parse_state_optics(p, optics);
         }
     } else {
@@ -245,7 +245,7 @@ Node* parser_parse_protocol(Parser p) {
         PtrVector states = ptr_vector_new(2);
         parser_parse_protocol_states(p, states);
         parser_expect(p, 2); // RBrace
-        alloc<Node>(31, 0, name, states, 0, 0, string_slice("", 0, 0), 0)
+        alloc<Node>(31, 0, name, states, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
     }
 }
 
@@ -258,7 +258,7 @@ void parser_parse_params(Parser p, PtrVector params) {
 
             PtrVector children = ptr_vector_new(1);
             ptr_vector_push(children, ty);
-            ptr_vector_push(params, alloc<Node>(35, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            ptr_vector_push(params, alloc<Node>(35, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1));
 
             if (p.current.tag == 8) { // Comma
                 {
@@ -270,6 +270,54 @@ void parser_parse_params(Parser p, PtrVector params) {
     } else { 0 }
 }
 
+Node* parser_parse_extern_c(Parser p) {
+    {
+        parser_advance(p); // extern
+        parser_advance(p); // "C"
+        parser_expect(p, 1); // {
+        PtrVector decls = ptr_vector_new(4);
+        parser_parse_extern_decls(p, decls);
+        parser_expect(p, 2); // }
+        alloc<Node>(40, 0, string_slice("extern_c", 0, 8), decls, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
+    }
+}
+
+void parser_parse_extern_decls(Parser p, PtrVector decls) {
+    if (p.current.tag != 2) { // RBrace
+        {
+            ptr_vector_push(decls, parser_parse_decl(p));
+            parser_parse_extern_decls(p, decls);
+        }
+    } else { 0 }
+}
+
+Node* parser_parse_resource(Parser p) {
+    {
+        parser_advance(p); // resource
+        Node* ty = parser_parse_type(p);
+        String name = p.current.lexeme;
+        parser_advance(p);
+        if (p.current.tag == 18) { // =
+            {
+                parser_advance(p);
+                Node* init = parser_parse_expr(p);
+                PtrVector children = ptr_vector_new(2);
+                ptr_vector_push(children, ty);
+                ptr_vector_push(children, init);
+                parser_expect(p, 7); // ;
+                alloc<Node>(41, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
+            }
+        } else {
+            {
+                PtrVector children = ptr_vector_new(1);
+                ptr_vector_push(children, ty);
+                parser_expect(p, 7); // ;
+                alloc<Node>(41, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
+            }
+        }
+    }
+}
+
 Node* parser_parse_decl(Parser p) {
     {
         if (p.current.tag == 35) { // struct
@@ -278,31 +326,42 @@ Node* parser_parse_decl(Parser p) {
             if (p.current.tag == 37) { // protocol
                 parser_parse_protocol(p)
             } else {
-                // Simplified function/global decl
-                {
-                    Node* ty = parser_parse_type(p);
-                    String name = p.current.lexeme;
-                    parser_advance(p);
-                    if (p.current.tag == 3) { // Function LParen
-                        {
-                            parser_advance(p); // (
-                            PtrVector params = ptr_vector_new(4);
-                            parser_parse_params(p, params);
-                            parser_expect(p, 4); // )
-                            Node* body = parser_parse_primary(p);
-                            PtrVector children = ptr_vector_new(3);
-                            ptr_vector_push(children, ty);
-
-                            Node* params_node = alloc<Node>(36, 0, string_slice("params", 0, 6), params, 0, 0, string_slice("", 0, 0), 0);
-                            ptr_vector_push(children, params_node);
-                            ptr_vector_push(children, body);
-                            alloc<Node>(1, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
-                        }
+                if (p.current.tag == 39) { // extern
+                    parser_parse_extern_c(p)
+                } else {
+                    if (p.current.tag == 36) { // resource
+                        parser_parse_resource(p)
                     } else {
+                        // Simplified function/global decl
                         {
-                            PtrVector children = ptr_vector_new(1);
-                            ptr_vector_push(children, ty);
-                            alloc<Node>(2, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+                            Node* ty = parser_parse_type(p);
+                            String name = p.current.lexeme;
+                            parser_advance(p);
+                            if (p.current.tag == 3) { // Function LParen
+                                {
+                                    parser_advance(p); // (
+                                    PtrVector params = ptr_vector_new(4);
+                                    parser_parse_params(p, params);
+                                    parser_expect(p, 4); // )
+                                    Node* body = parser_parse_primary(p);
+                                    PtrVector children = ptr_vector_new(3);
+                                    ptr_vector_push(children, ty);
+
+                                    Node* params_node = alloc<Node>(36, 0, string_slice("params", 0, 6), params, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1);
+                                    ptr_vector_push(children, params_node);
+                                    ptr_vector_push(children, body);
+                                    alloc<Node>(1, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
+                                }
+                            } else {
+                                {
+                                    PtrVector children = ptr_vector_new(1);
+                                    ptr_vector_push(children, ty);
+                                    if (p.current.tag == 7) {
+                                        parser_advance(p);
+                                    } else { 0 };
+                                    alloc<Node>(2, 0, name, children, 0, 0, string_slice("", 0, 0), 0, alloc<Fingerprint>(0, 0), 1)
+                                }
+                            }
                         }
                     }
                 }

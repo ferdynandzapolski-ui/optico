@@ -1,11 +1,5 @@
 // std/compiler/lexer.oco - Lexer for self-hosted OptiCo v0.3 compiler
 
-struct Token {
-    int tag;
-    String lexeme;
-    int line;
-}
-
 struct Lexer {
     String input;
     int pos;
@@ -129,6 +123,10 @@ Token lexer_lex_keyword(String s, int line) {
         if (string_equal(s, "I")) { return alloc<Token>(56, s, line); } else { 0 };
         if (string_equal(s, "true")) { return alloc<Token>(57, s, line); } else { 0 };
         if (string_equal(s, "false")) { return alloc<Token>(58, s, line); } else { 0 };
+        if (string_equal(s, "clock")) { return alloc<Token>(59, s, line); } else { 0 };
+        if (string_equal(s, "volatile")) { return alloc<Token>(60, s, line); } else { 0 };
+        if (string_equal(s, "normal")) { return alloc<Token>(61, s, line); } else { 0 };
+        if (string_equal(s, "durable")) { return alloc<Token>(62, s, line); } else { 0 };
         alloc<Token>(21, s, line)
     }
 }

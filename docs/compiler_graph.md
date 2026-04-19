@@ -32,9 +32,9 @@ protocol NodeSession {
 
 To support large codebases, the graph is backed by a **Zero-Copy Content-Addressable Storage (CAS)** system using **LMDB** as a memory-mapped backing engine. This allows the compiler to treat the entire disk-backed graph as a single comonadic store.
 
-- **Content-Addressability:** Each node is identified by a stable 128-bit **Fingerprint** (cryptographic hash).
+- **Content-Addressability:** Each node is identified by a stable 128-bit **Fingerprint** (hi/lo 64-bit pair).
 - **Zero-Copy Reads:** Nodes are paged directly from the OS page cache into the address space, allowing optics to perform field-offset arithmetic directly on disk-mapped data without deserialization.
-- **Durability Levels:** Nodes are tagged with durability levels to manage memory pressure:
+- **Durability Levels:** Nodes are tagged with durability levels (0: Volatile, 1: Normal, 2: Durable) to manage memory pressure:
   - **Volatile:** Temporary nodes residing in the hot heap.
   - **Normal:** Standard IR nodes eligible for paging to disk.
   - **Durable:** Standard library and external dependency nodes, pre-loaded in memory-mapped read-only pages.
