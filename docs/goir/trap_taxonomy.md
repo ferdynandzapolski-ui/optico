@@ -28,3 +28,23 @@ Confidence annotations are embedded in types:
 `gptr<τ> @ confidence`
 
 A confidence of 1.0 (precise) is the default. Lower confidence values trigger the "always-safe" conservative fallbacks defined above.
+
+## Concrete Violation Examples
+
+The following table maps common memory safety violations to GOIR traps and expected behaviors across enforcement tiers.
+
+| Violation Scenario | Trap Type | Diag Tier (Trap + Trace) | Hybrid Tier (Trap) | Cap Tier (HW/SW Trap) | Relevant Law | Reference Test |
+|:--- |:--- |:--- |:--- |:--- |:--- |:--- |
+| **Out-of-bounds Load** | `GO_TRAP_BOUNDS` | Trap with site ID & bounds | Trap | HW Bounds Fault | Monotonicity | `tests/microc/bounds_basic_oob_read.c` |
+| **Use-after-free** | `GO_TRAP_LIFE` | Trap with site ID & alloc ID | Trap | SW Check Trap | PutGet (Temporal) | `tests/microc/lifetime_uaf_read.c` |
+| **Double Free** | `GO_TRAP_LIFE` | Trap with site ID | Trap | SW Check Trap | Monotonicity | `tests/microc/lifetime_double_free.c` |
+| **Write to Read-Only** | `GO_TRAP_PERMS` | Trap with site ID & perms | Trap | HW Perms Fault | Monotonicity | `refmodel/tests/basic_tests.rs` |
+| **Free of non-base** | `GO_TRAP_BOUNDS` | Trap with site ID | Trap | HW Bounds Fault | Monotonicity | `refmodel/tests/basic_tests.rs` (test_free_non_base) |
+| **Invalid ptr-int** | `GO_TRAP_PROV` | Trap with policy info | Trap | SW Check Trap | PNVI Provenance | `tests/microc/prov_ptr_int_roundtrip.c` |
+| **Tainted Deref** | `GO_TRAP_PROV` | Trap with "TOP grade" log | Trap | HW/SW Trap | Monotonicity | `refmodel/tests/basic_tests.rs` |
+| **OOB memcpy** | `GO_TRAP_BOUNDS` | Trap with range info | Trap | HW/SW Trap | Monotonicity | `tests/microc/memcpy_oob_src.c` |
+| **One-past-end Deref** | `GO_TRAP_BOUNDS` | Trap with site ID | Trap | HW Bounds Fault | Monotonicity | `refmodel/tests/basic_tests.rs` |
+| **Null Deref** | `GO_TRAP_BOUNDS` | Trap with null info | Trap | HW Fault | Monotonicity | `refmodel/tests/basic_tests.rs` (test_oob_load with galloc(0)) |
+| **Alias Violation** | `GO_TRAP_ALIAS` | Trap with conflict info | Trap | SW Check Trap | Alias Invariant | `tests/microc/lifetime_uaf_alias.c` |
+
+*Note: In the Cap tier, spatial and permission checks are typically enforced by CHERI hardware, while lifetime and provenance residuals may still require software-mediated traps.*
