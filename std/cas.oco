@@ -1,0 +1,26 @@
+// std/cas.oco - Content-Addressable Storage for OptiCo v0.3
+
+struct CASStore {
+    int id;
+}
+
+Fingerprint cas_fingerprint(String s) {
+    // Mock fingerprinting: use string length and leading character
+    {
+        int hi = s.len;
+        int lo = 0;
+        if (s.len > 0) {
+            lo := string_at(s, 0);
+        } else { 0 };
+        alloc<Fingerprint>(hi, lo)
+    }
+}
+
+void cas_store(CASStore store, Fingerprint f, pointer<Unit, Heap> data) {
+    // Intrinsic for storing data by fingerprint
+}
+
+pointer<Unit, Heap> cas_fetch(CASStore store, Fingerprint f) {
+    // Intrinsic for fetching data by fingerprint
+    0
+}

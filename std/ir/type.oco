@@ -4,10 +4,12 @@ struct TypeIR {
     String kind;
     int size;
     PtrVector params;
+    Fingerprint fingerprint;
 }
 
 struct IR {
     int opcode;
     int value;
     PtrVector inputs;
+    Fingerprint fingerprint;
 }

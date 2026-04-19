@@ -20,7 +20,11 @@ The I/O module handles interaction with the system.
 - `resource Console console`: A linear resource representing the system console. It is pre-allocated with an ID of 1.
 
 ### Structs
-- `struct File { int fd; }`: Represents a file handle.
+- `struct FileObj { int fd; }`: Represents a file handle.
+- `struct Fingerprint { int hi; int lo; }`: A 128-bit stable identifier for content-addressable storage.
+
+### Protocols
+- `protocol File`: Defines `Open` and `Closed` states for file I/O.
 
 ### Functions
 - `void print_int(int val)`: Outputs an integer to the console.
@@ -45,9 +49,14 @@ To support the graph-based IR model, the library provides standard structures an
 - `state Resolved { optic Type* typecheck; }`: Focuses on type analysis to reach the `Typed` state.
 
 ### Structs
-- `struct Node { int id; SourceLoc loc; }`: The base carrier for AST information.
-- `struct Symbol { string name; int scope_id; }`: Represents a resolved symbol.
-- `struct Type { string kind; int size; }`: Represents a verified type.
+- `struct Node`: The base carrier for AST information, including `fingerprint` and `durability` fields.
+- `struct Symbol`: Represents a resolved symbol with a `fingerprint`.
+- `struct TypeIR`: Represents a verified type with a `fingerprint`.
+
+## Content-Addressable Storage (`std/cas.oco`)
+- `Fingerprint cas_fingerprint(String s)`: Generates a fingerprint for a given string.
+- `void cas_store(CASStore store, Fingerprint f, pointer<Unit, Heap> data)`: Stores data by its fingerprint.
+- `pointer<Unit, Heap> cas_fetch(CASStore store, Fingerprint f)`: Fetches data by its fingerprint.
 
 ## Interoperability Support (`std/interop.oco`)
 Supports legacy C integration through Pointer Lifting and `C_context`.
