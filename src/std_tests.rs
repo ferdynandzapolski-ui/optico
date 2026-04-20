@@ -64,7 +64,14 @@ mod tests {
 
     #[test]
     fn test_ir_symbol_sema() {
-        check_file("std/ir/symbol.oco");
+        let mut full_content = fs::read_to_string("std/prelude.oco").unwrap();
+        full_content.push_str(&fs::read_to_string("std/ptr_vector.oco").unwrap());
+        full_content.push_str(&fs::read_to_string("std/ir/node.oco").unwrap());
+        full_content.push_str(&fs::read_to_string("std/ir/symbol.oco").unwrap());
+        let mut parser = Parser::new(&full_content);
+        let prog = parser.parse_program();
+        let mut sema = Sema::new();
+        sema.check_program(&prog);
     }
 
     #[test]

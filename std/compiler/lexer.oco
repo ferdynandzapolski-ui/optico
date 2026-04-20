@@ -1,11 +1,5 @@
 // std/compiler/lexer.oco - Lexer for self-hosted OptiCo v0.3 compiler
 
-struct Token {
-    int tag;
-    String lexeme;
-    int line;
-}
-
 struct Lexer {
     String input;
     int pos;

@@ -9,6 +9,8 @@ struct Node {
     optic Node* next;
     String source_file;
     int line_number;
+    Fingerprint fingerprint;
+    int durability;
 }
 
 // NodeSession protocol for phase management
@@ -37,8 +39,9 @@ Symbol* resolve(Node* n) {
 TypeIR* typecheck(Node* n) {
     {
         // Simple type checking: everything is Int or Void for now
-        TypeIR* t = alloc<TypeIR>(alloc<String>(3, alloc<char, Normal>(3)), 4, ptr_vector_new(0));
-        t.kind.data[0] := 'I'; t.kind.data[1] := 'n'; t.kind.data[2] := 't';
+        String ty_name = alloc<String>(3, alloc<char, Normal>(3));
+        ty_name.data[0] := 'I'; ty_name.data[1] := 'n'; ty_name.data[2] := 't';
+        TypeIR* t = alloc<TypeIR>(ty_name, 8, ptr_vector_new(0));
         t
     }
 }
