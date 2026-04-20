@@ -3,7 +3,7 @@
 struct Symbol {
     String name;
     int scope_id;
-    pointer<Unit, Heap> node_ref;
+    Node* node_ref;
 }
 
 struct SymbolTable {

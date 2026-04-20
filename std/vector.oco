@@ -12,7 +12,7 @@ struct Vector {
 }
 
 Vector vector_new(int cap) {
-    alloc<Vector>(0, cap, malloc_int(cap * 4))
+    alloc<Vector>(0, cap, malloc_int(cap * 8))
 }
 
 void vector_copy_rec(pointer<int, Heap> dst, pointer<int, Heap> src, int num, int i) {
@@ -33,7 +33,7 @@ void vector_push(Vector v, int val) {
             if (new_cap == 0) {
                 new_cap = 4;
             } else { 0 };
-            pointer<int, Heap> new_data = malloc_int(new_cap * 4);
+            pointer<int, Heap> new_data = malloc_int(new_cap * 8);
             vector_copy_rec(new_data, v.data, v.size, 0);
             v.data := new_data;
             v.capacity := new_cap;

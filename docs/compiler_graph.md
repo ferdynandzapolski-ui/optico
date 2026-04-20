@@ -75,7 +75,7 @@ The standard library (`std/`) must provide the base implementations for these no
 
 | Component | Path | Description |
 | :--- | :--- | :--- |
-| `Node` | `std/ir/node.oco` | Base AST node structure with `PtrVector` children, graph pointers (`parent`, `next`), and source locations. |
+| `Node` | `std/ir/node.oco` | Base AST node structure (10 fields) with `PtrVector` children, graph pointers (`parent`, `next`), source locations, 128-bit `Fingerprint`, and `Durability` level. |
 | `Symbol` | `std/ir/symbol.oco` | Symbol table and scope management referencing IR nodes. |
 | `Type` | `std/ir/type.oco` | Type system representation supporting parameterized types. |
 | `PtrVector` | `std/ptr_vector.oco` | Core collection for managing IR node pointers. |
