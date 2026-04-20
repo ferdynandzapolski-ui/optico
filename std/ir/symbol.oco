@@ -5,3 +5,15 @@ struct Symbol {
     int scope_id;
     pointer<Unit, Heap> node_ref;
 }
+
+struct SymbolTable {
+    PtrVector symbols;
+}
+
+SymbolTable symbol_table_new() {
+    alloc<SymbolTable>(ptr_vector_new(16))
+}
+
+void symbol_table_insert(SymbolTable st, Symbol* sym) {
+    ptr_vector_push(st.symbols, sym)
+}

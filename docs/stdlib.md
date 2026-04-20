@@ -36,6 +36,21 @@ The I/O module handles interaction with the system.
 - `Vector vector_new(int cap)`: Creates a new integer vector.
 - `void vector_push(Vector v, int val)`: Pushes an integer onto the vector, resizing if necessary.
 
+### String (`std/string.oco`)
+- `int string_to_int(String s)`: Converts a string to an integer.
+- `int string_find(String s, char c, int start)`: Finds the first occurrence of `c` in `s` starting from `start`. Returns -1 if not found.
+
+## Compiler Support (`std/compiler/`)
+Components for the self-hosted compiler.
+
+### Lexer (`std/compiler/lexer.oco`)
+- `Token lexer_next_token(Lexer l)`: Produces the next token from the input stream.
+- Supports keywords: `struct`, `protocol`, `resource`, `extern`, `traversal`, `co`, `optic`, `rec`, `atomic`, `pointer`, `if`, `else`, `return`.
+
+### Parser (`std/compiler/parser.oco`)
+- `Node* parser_parse_program(Parser p)`: Entry point for parsing an entire OptiCo program.
+- Implements recursive descent parsing with support for expression precedence and declaration nesting.
+
 ## Compiler IR Components (`std/ir/`)
 To support the graph-based IR model, the library provides standard structures and protocols for compiler phases.
 

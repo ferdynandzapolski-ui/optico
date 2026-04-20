@@ -119,6 +119,14 @@ bool is_space(char c) {
     }
 }
 
+bool is_newline(char c) {
+    if (c == '\n') {
+        true
+    } else {
+        c == '\r'
+    }
+}
+
 bool is_hex_digit(char c) {
     if (is_digit(c)) {
         true

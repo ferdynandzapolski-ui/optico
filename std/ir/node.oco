@@ -26,16 +26,27 @@ protocol NodeSession {
 }
 
 Symbol* resolve(Node* n) {
-    // Placeholder for symbol resolution logic
-    alloc<Symbol>(n.lexeme, 0, n)
+    {
+        // For self-hosting, we start building a symbol table
+        Symbol* s = alloc<Symbol>(n.lexeme, 0, n);
+        // Transition: Parsed -> Resolved (simplified)
+        s
+    }
 }
 
 TypeIR* typecheck(Node* n) {
-    // Placeholder for type checking logic
-    alloc<TypeIR>(alloc<String>(0, alloc<char, Normal>(0)), 0, ptr_vector_new(0))
+    {
+        // Simple type checking: everything is Int or Void for now
+        TypeIR* t = alloc<TypeIR>(alloc<String>(3, alloc<char, Normal>(3)), 4, ptr_vector_new(0));
+        t.kind.data[0] := 'I'; t.kind.data[1] := 'n'; t.kind.data[2] := 't';
+        t
+    }
 }
 
 IR* lower(Node* n) {
-    // Placeholder for lowering logic
-    alloc<IR>(0, 0, ptr_vector_new(0))
+    {
+        // Lowering to basic IR opcodes
+        IR* ir = alloc<IR>(n.kind, 0, ptr_vector_new(0));
+        ir
+    }
 }
