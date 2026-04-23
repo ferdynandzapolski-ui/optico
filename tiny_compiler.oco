@@ -1,0 +1,52 @@
+// tiny_compiler.oco - Tiny self-hosted OptiCo compiler
+
+extern "C" {
+    void print_int(int val);
+}
+
+// Global state (simplified)
+int input_pos;
+int current_val;
+
+// Initialize
+void init_parser(char* input) {
+    input_pos := 0;
+    current_val := 0;
+}
+
+// Get digit value
+int get_digit(char* input) {
+    int d = input[input_pos] - '0';
+    input_pos := input_pos + 1;
+    d
+}
+
+// Parse number
+int parse_number(char* input) {
+    int val = 0;
+    while (input[input_pos] >= '0' && input[input_pos] <= '9') {
+        val := val * 10 + get_digit(input);
+    }
+    val
+}
+
+// Parse expression
+int parse_expr(char* input) {
+    int left = parse_number(input);
+
+    if (input[input_pos] == '+') {
+        input_pos := input_pos + 1;
+        int right = parse_expr(input);
+        left + right
+    } else {
+        left
+    }
+}
+
+// Main compiler
+int compile(char* source) {
+    init_parser(source);
+    int result = parse_expr(source);
+    print_int(result);
+    result
+}

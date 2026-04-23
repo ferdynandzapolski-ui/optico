@@ -12,9 +12,12 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
-        if arg.starts_with("--goir-tier=") {
+        if arg == "--debug-ast" {
+            debug_ast = true;
+        } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
@@ -39,20 +42,29 @@ fn main() {
     let prog = Program { decls: all_decls };
     let filepath = input_files.last().unwrap();
 
+    // Debug: Print AST
+    if debug_ast {
+        println!("--- AST for {} ---", filepath);
+        for decl in &prog.decls {
+            println!("{:?}", decl);
+        }
+        println!();
+    }
+
     let mut sema = Sema::new();
     if Path::new("beliefs.json").exists() {
         sema.load_beliefs("beliefs.json");
     }
     sema.check_program(&prog);
 
-    let cir = CIRLowerer::lower_program(&prog);
-    let code = CodeGenerator::generate(&cir);
+    let mut codegen = CodeGenerator::new();
+    let code = codegen.generate_program(&prog);
 
     // Write generated IR to file
     let llvm_path = Path::new(filepath).with_extension("ll");
     fs::write(&llvm_path, &code).expect("Failed to write LLVM IR file");
 
-    println!("--- OptiCo CIR for {} ---", filepath);
+    println!("--- OptiCo LLVM IR for {} ---", filepath);
     println!("{}", code);
 
     if llvm_path.exists() {
@@ -65,13 +77,12 @@ fn main() {
         // 1. Run opt with GOIR passes
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
-            .arg(format!("-passes={}", goir_passes))
-            .arg(format!("-go-tier={}", match tier { "diag" => "0", "hybrid" => "1", "cap" => "2", _ => "0" }))
-            .arg("-S")
-            .arg(&llvm_path)
-            .arg("-o")
-            .arg(&output_ll)
-            .status();
+             .arg(format!("-passes={}", goir_passes))
+             .arg("-S")
+             .arg(&llvm_path)
+             .arg("-o")
+             .arg(&output_ll)
+             .status();
 
         if let Ok(s) = opt_status {
             if s.success() {

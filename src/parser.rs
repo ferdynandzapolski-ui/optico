@@ -115,11 +115,11 @@ impl<'a> Parser<'a> {
         };
         self.advance();
 
-        if self.current_token == Token::LParen {
+        if matches!(&self.current_token, Token::LParen | Token::LBrace) {
             // Function declaration
             self.advance();
             let mut params = Vec::new();
-            while self.current_token != Token::RParen {
+            while !matches!(&self.current_token, Token::RParen | Token::RBrace) {
                 let p_ty = self.parse_type();
                 let p_name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
@@ -131,7 +131,11 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
             }
-            self.expect(Token::RParen);
+            if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                self.advance();
+            } else {
+                panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+            }
             let body = if self.current_token == Token::Semi {
                 Expr::Block(vec![])
             } else {
@@ -436,9 +440,17 @@ impl<'a> Parser<'a> {
         }
         if self.current_token == Token::If {
             self.advance();
-            self.expect(Token::LParen);
+            if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                self.advance();
+            } else {
+                panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+            }
             let cond = self.parse_expr();
-            self.expect(Token::RParen);
+            if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                self.advance();
+            } else {
+                panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+            }
             let then = self.parse_expr();
             let mut els = None;
             if self.current_token == Token::Else {
@@ -447,21 +459,37 @@ impl<'a> Parser<'a> {
             }
             return Expr::If(Box::new(cond), Box::new(then), els);
         }
+        if self.current_token == Token::While {
+            self.advance();
+            if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                self.advance();
+            } else {
+                panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+            }
+            let cond = self.parse_expr();
+            if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                self.advance();
+            } else {
+                panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+            }
+            let body = self.parse_expr();
+            return Expr::While(Box::new(cond), Box::new(body));
+        }
 
         self.parse_put_expr()
     }
 
     fn parse_put_expr(&mut self) -> Expr {
-        let mut e = self.parse_comparison_expr();
+        let mut e = self.parse_logical_expr();
         loop {
             match &self.current_token {
                 Token::Pipe => {
                     self.advance();
-                    e = Expr::Compose(Box::new(e), Box::new(self.parse_comparison_expr()));
+                    e = Expr::Compose(Box::new(e), Box::new(self.parse_logical_expr()));
                 }
                 Token::Put => {
                     self.advance();
-                    e = Expr::Put(Box::new(e), Box::new(self.parse_comparison_expr()));
+                    e = Expr::Put(Box::new(e), Box::new(self.parse_logical_expr()));
                 }
                 _ => break,
             }
@@ -483,6 +511,19 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_additive_expr()));
+        }
+        e
+    }
+
+    fn parse_logical_expr(&mut self) -> Expr {
+        let mut e = self.parse_comparison_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::AndAnd => BinOpKind::And,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_comparison_expr()));
         }
         e
     }
@@ -543,6 +584,12 @@ impl<'a> Parser<'a> {
 
     fn parse_primary_expr(&mut self) -> Expr {
         match &self.current_token {
+            Token::LParen => {
+                self.advance();
+                let e = self.parse_expr();
+                self.expect(Token::RParen);
+                Expr::Paren(Box::new(e))
+            }
             Token::LBrace => {
                 self.advance();
                 let mut exprs = Vec::new();
@@ -602,29 +649,53 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
                 self.expect(Token::Gt);
-                self.expect(Token::LParen);
+                if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+                }
                 let mut args = Vec::new();
-                while self.current_token != Token::RParen {
+                while !matches!(&self.current_token, Token::RParen | Token::RBrace) {
                     args.push(self.parse_expr());
                     if self.current_token == Token::Comma {
                         self.advance();
                     }
                 }
-                self.expect(Token::RParen);
+                if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+                }
                 Expr::Alloc(_ty, args, dur)
             }
             Token::Free => {
                 self.advance();
-                self.expect(Token::LParen);
+                if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+                }
                 let e = self.parse_expr();
-                self.expect(Token::RParen);
+                if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+                }
                 Expr::Free(Box::new(e))
             }
             Token::Checked => {
                 self.advance();
-                self.expect(Token::LParen);
+                if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+                }
                 let e = self.parse_expr();
-                self.expect(Token::RParen);
+                if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                    self.advance();
+                } else {
+                    panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+                }
                 Expr::Checked(Box::new(e))
             }
             Token::Star => {
@@ -694,7 +765,7 @@ impl<'a> Parser<'a> {
                         let mut next_lex = lex_copy.clone();
                         let after_next = next_lex.next_token();
                         match after_next {
-                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At | Token::PerfGrade | Token::LParen => true,
+                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At | Token::PerfGrade | Token::LParen | Token::LBrace => true,
                             _ => false,
                         }
                     }
@@ -721,16 +792,36 @@ impl<'a> Parser<'a> {
                     if self.current_token == Token::Assign {
                         self.advance();
                         Expr::Assign(name, Box::new(self.parse_expr()))
-                    } else if self.current_token == Token::LParen {
-                    self.advance();
-                    let mut args = Vec::new();
-                    while self.current_token != Token::RParen {
-                        args.push(self.parse_expr());
-                        if self.current_token == Token::Comma {
-                            self.advance();
+                    } else if matches!(&self.current_token, Token::LParen | Token::LBrace | Token::Lt) {
+                        // Handle function calls: name(args) or generic calls: name<Type>(args)
+                        let mut type_param = None;
+                        if self.current_token == Token::Lt {
+                            self.advance();  // Advance past <
+                            if let Token::Ident(n) = &self.current_token {
+                                type_param = Some(n.clone());
+                                self.advance();  // Advance past type name
+                            }
+                            self.expect(Token::Gt);  // Expect >
                         }
-                    }
-                        self.expect(Token::RParen);
+                        // Now expect ( for function arguments
+                        if self.current_token == Token::LParen || self.current_token == Token::LBrace {
+                            self.advance();  // Advance past ( or {
+                        } else {
+                            panic!("Expected LParen after function name, found {:?}", self.current_token);
+                        }
+                        let mut args = Vec::new();
+                        while !matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                            args.push(self.parse_expr());
+                            if self.current_token == Token::Comma {
+                                self.advance();
+                            }
+                        }
+                        if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                            self.advance();
+                        } else {
+                            panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+                        }
+                        // TODO: Store type_param in Expr::Call if needed
                         Expr::Call(Box::new(Expr::Var(name)), args)
                     } else {
                         Expr::Var(name)

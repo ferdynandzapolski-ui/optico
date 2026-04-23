@@ -593,6 +593,12 @@ impl Sema {
                 self.guarded = old_guarded;
                 if let Some(e) = els { self.check_expr(e, env, res_consumed, local_resources); then_ty } else { then_ty }
             }
+            Expr::While(cond, body) => {
+                let cond_ty = self.check_expr(cond, env, res_consumed, local_resources);
+                if cond_ty != Type::Bool { panic!("While condition must be bool"); }
+                self.check_expr(body, env, res_consumed, local_resources);
+                Type::Void
+            }
             Expr::BinOp(kind, e1, e2) => {
                 let ty1 = self.check_expr(e1, env, res_consumed, local_resources);
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
@@ -601,6 +607,9 @@ impl Sema {
                         if ty1 == Type::Int && ty2 == Type::Int { Type::Int } else { Type::Float }
                     }
                     BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt | BinOpKind::Le | BinOpKind::Ge => { Type::Bool }
+                    BinOpKind::And => {
+                        if ty1 == Type::Bool && ty2 == Type::Bool { Type::Bool } else { panic!("And operands must be bool") }
+                    }
                 }
             }
             Expr::Return(e) => {
@@ -619,13 +628,14 @@ impl Sema {
                 let ty2 = self.check_expr(e2, env, res_consumed, local_resources);
                 if ty2 != Type::Int { panic!("Index must be integer"); }
                 match ty1 {
-                    Type::Pointer(inner, _, _) | Type::Traversal(inner, _, _, _) => {
+                    Type::Pointer(inner, _, _) | Type::Traversal(inner, _, _, _) | Type::Optic(inner, _, _, _) => {
                          if !self.in_checked { }
                          (*inner).clone()
                     }
                     _ => panic!("Index requires pointer or traversal type, found {:?}", ty1),
                 }
             }
+            Expr::Paren(e) => self.check_expr(e, env, res_consumed, local_resources),
         }
     }
 }

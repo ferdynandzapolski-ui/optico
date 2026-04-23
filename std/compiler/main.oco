@@ -1,0 +1,144 @@
+// std/compiler/main.oco - Main entry point for self-hosted OptiCo compiler
+// This is the bootstrap compiler that compiles itself
+
+// Import all compiler modules
+// (In self-hosted mode, these are compiled together)
+
+// Compiler configuration
+struct CompilerConfig {
+    String input_file;
+    String output_file;
+    bool emit_llvm;
+    bool run_passes;
+    String pass_pipeline;
+}
+
+CompilerConfig config_default() {
+    alloc<CompilerConfig>(
+        alloc<String>(0, alloc<char,Normal>(0)),  // input_file
+        alloc<String>(0, alloc<char,Normal>(0)),  // output_file
+        true,                                       // emit_llvm
+        false,                                      // run_passes
+        alloc<String>(0, alloc<char,Normal>(0))   // pass_pipeline
+    )
+}
+
+// Parse command line arguments
+void config_parse(CompilerConfig cfg, PtrVector args) {
+    {
+        int i = 1;
+        config_parse_loop(cfg, args, i)
+    }
+}
+
+void config_parse_loop(CompilerConfig cfg, PtrVector args, int i) {
+    if (i < ptr_vector_size(args)) {
+        {
+            String arg = ptr_vector_get(args, i);
+            if (string_equal(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
+                // -o
+                cfg.output_file := ptr_vector_get(args, i + 1);
+                config_parse_loop(cfg, args, i + 2)
+            } else {
+                if (string_equal(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
+                    // --emit-llvm
+                    cfg.emit_llvm := true;
+                    config_parse_loop(cfg, args, i + 1)
+                } else {
+                    if (string_starts_with(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
+                        cfg.input_file := arg;
+                        config_parse_loop(cfg, args, i + 1)
+                    } else {
+                        config_parse_loop(cfg, args, i + 1)
+                    }
+                }
+            }
+        }
+    } else {
+        0
+    }
+}
+
+// Read entire file into string
+String file_read_all(String path) {
+    {
+        int len = 0;  // Would use file size in real implementation
+        pointer<char, Normal> data = alloc<char, Normal>(1024);
+        // Simplified: return empty string
+        // Real implementation would use C read()/fread()
+        alloc<String>(0, data)
+    }
+}
+
+// Write string to file
+void file_write_all(String path, String content) {
+    // Simplified: would use C write()/fwrite()
+    0
+}
+
+// Main compilation pipeline
+int compile(CompilerConfig cfg) {
+    {
+        // 1. Read input file
+        String source = file_read_all(cfg.input_file);
+        
+        // 2. Lex source into tokens
+        Lexer lexer = alloc<Lexer>(source, 0, 1);
+        PtrVector tokens = ptr_vector_new(256);
+        
+        // Lex all tokens
+        lexer_lex_all(lexer, tokens);
+        
+        // 3. Parse tokens into AST
+        Parser parser = alloc<Parser>(lexer, ptr_vector_get(tokens, 0));
+        Node* ast = parser_parse_program(parser);
+        
+        // 4. Semantic analysis
+        // (Would include symbol table building, type checking)
+        
+        // 5. Generate LLVM IR
+        CodegenContext ctx = codegen_new();
+        String llvm_ir = codegen_generate(ctx, ast);
+        
+        // 6. Write output
+        if (cfg.emit_llvm) {
+            file_write_all(cfg.output_file, llvm_ir)
+        };
+        
+        0  // Success
+    }
+}
+
+void lexer_lex_all(Lexer lexer, PtrVector tokens) {
+    {
+        Token t = lexer_next_token(lexer);
+        lexer_lex_loop(lexer, tokens, t)
+    }
+}
+
+void lexer_lex_loop(Lexer lexer, PtrVector tokens, Token t) {
+    if (t.tag != 0) {  // Not EOF
+        {
+            ptr_vector_push(tokens, t);
+            Token next_tok = lexer_next_token(lexer);
+            lexer_lex_loop(lexer, tokens, next_tok)
+        }
+    } else {
+        0
+    }
+}
+
+// Entry point
+int main(PtrVector args) {
+    {
+        CompilerConfig cfg = config_default();
+        config_parse(cfg, args);
+        
+        if (string_equal(cfg.input_file, alloc<String>(0, alloc<char,Normal>(0)))) {
+            // No input file specified, print usage
+            0
+        } else {
+            compile(cfg)
+        }
+    }
+}

@@ -1,0 +1,16 @@
+// variables_test.oco - Test local variables and assignments
+
+extern "C" {
+    void print_int(int val);
+}
+
+void test_variables() {
+    int x = 10;
+    int y = 20;
+    int z = x + y;
+    print_int(z);
+}
+
+void main() {
+    test_variables();
+}

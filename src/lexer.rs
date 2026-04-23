@@ -4,7 +4,7 @@ pub enum Token {
     Struct, Resource, Co, Optic, Rec, Atomic, Pointer,
     Next, Prev, Alloc, Free, Unsafe, Checked, Spawn,
     ResourceKw, Protocol, State, Extern, Traversal,
-    If, Else, Return, Later,
+    If, Else, While, Return, Later,
     Ident(String),
     StringLit(String),
     IntLit(i64),
@@ -13,7 +13,7 @@ pub enum Token {
     CharLit(char),
     LBrace, RBrace, LParen, RParen, LBracket, RBracket,
     Dot, Comma, Semi, Colon, Star, Assign, Put, Arrow, Pipe,
-    Bang, Plus, Minus, Slash, At,
+    Bang, Plus, Minus, Slash, At, Amp, AndAnd,
     Eq, Ne, Lt, Gt, Le, Ge,
     PerfGrade,
     EOF,
@@ -28,6 +28,10 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self { input, pos: 0 }
+    }
+
+    pub fn position(&self) -> usize {
+        self.pos
     }
 
     fn peek(&self) -> Option<char> {
@@ -101,6 +105,14 @@ impl<'a> Lexer<'a> {
                 }
             }
             '@' => Token::At,
+            '&' => {
+                if self.peek() == Some('&') {
+                    self.advance();
+                    Token::AndAnd
+                } else {
+                    Token::Amp
+                }
+            },
             '+' => Token::Plus,
             '-' => {
                 if self.peek() == Some('>') {
@@ -218,8 +230,9 @@ impl<'a> Lexer<'a> {
                     "unsafe" => Token::Unsafe,
                     "checked" => Token::Checked,
                     "spawn" => Token::Spawn,
-                    "if" => Token::If,
-                    "else" => Token::Else,
+    "if" => Token::If,
+    "else" => Token::Else,
+    "while" => Token::While,
                     "return" => Token::Return,
                     "I" => Token::Later,
                     "PerfGrade" => Token::PerfGrade,

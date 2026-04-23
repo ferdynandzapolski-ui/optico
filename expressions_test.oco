@@ -1,0 +1,40 @@
+// expressions_test.oco - Test various expressions
+
+extern "C" {
+    void print_int(int val);
+}
+
+// Test arithmetic expressions
+int test_arithmetic() {
+    int a = 10;
+    int b = 3;
+    int c = a + b * 2;  // 10 + 6 = 16
+    c
+}
+
+// Test comparison expressions
+int test_comparisons() {
+    int x = 5;
+    int y = 10;
+    int result = 0;
+
+    if (x < y) {
+        result = result + 1;
+    }
+
+    if (x == 5) {
+        result = result + 2;
+    }
+
+    if (y > x) {
+        result = result + 4;
+    }
+
+    result  // Should be 7 (1+2+4)
+}
+
+// Main test
+void test_expressions() {
+    print_int(test_arithmetic());
+    print_int(test_comparisons());
+}

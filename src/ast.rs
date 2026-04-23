@@ -29,6 +29,7 @@ pub enum Type {
 pub enum BinOpKind {
     Add, Sub, Mul, Div,
     Eq, Ne, Lt, Gt, Le, Ge,
+    And,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,6 +43,7 @@ pub enum Expr {
     Access(Box<Expr>, String), // e.l
     Call(Box<Expr>, Vec<Expr>), // e1(e2, ...)
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>), // if (e1) e2 [else e3]
+    While(Box<Expr>, Box<Expr>), // while (e1) e2
     BinOp(BinOpKind, Box<Expr>, Box<Expr>),
     Index(Box<Expr>, Box<Expr>), // e1[e2]
     Next(Box<Expr>, Option<String>),           // next<k> e
@@ -56,6 +58,7 @@ pub enum Expr {
     Checked(Box<Expr>),        // checked (e)
     Spawn(Box<Expr>),          // spawn { e }
     Block(Vec<Expr>),          // { e1; e2; ... }
+    Paren(Box<Expr>),          // (e)
     LocalDecl(String, Type, Box<Expr>), // τ x = e
     Assign(String, Box<Expr>), // x = e
     Return(Box<Expr>),

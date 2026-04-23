@@ -1,0 +1,75 @@
+// minimal_compiler.oco - Minimal self-hosted OptiCo compiler
+
+extern "C" {
+    void print_int(int val);
+}
+
+// Lexer state structure
+struct LexerState {
+    char* input;
+    int pos;
+    int current_token;
+}
+
+// Create lexer state
+LexerState* lexer_new(char* src) {
+    LexerState* l = alloc<LexerState>();
+    l.input := src;
+    l.pos := 0;
+    l.current_token := 0;
+    l
+}
+
+// Get next token
+int lexer_next(LexerState* l) {
+    if (l.input[l.pos] == 0) {
+        l.current_token := 999;  // EOF
+        999
+    } else {
+        if (l.input[l.pos] >= '0' && l.input[l.pos] <= '9') {
+            int val = 0;
+            while (l.input[l.pos] >= '0' && l.input[l.pos] <= '9') {
+                val := val * 10 + (l.input[l.pos] - '0');
+                l.pos := l.pos + 1;
+            }
+            l.current_token := val;
+            1  // TOK_INT
+        } else {
+            if (l.input[l.pos] == '+') {
+                l.pos := l.pos + 1;
+                l.current_token := 0;
+                2  // TOK_PLUS
+            } else {
+                l.pos := l.pos + 1;
+                0  // Skip unknown
+            }
+        }
+    }
+}
+
+// Simple evaluator (direct interpretation)
+int eval_expr(LexerState* l) {
+    int left = l.current_token;
+    lexer_next(l);
+
+    if (l.current_token == 2) {  // TOK_PLUS
+        lexer_next(l);
+        int right = eval_expr(l);
+        left + right
+    } else {
+        left
+    }
+}
+
+// Main compiler function
+int compile(char* source) {
+    LexerState* lexer = lexer_new(source);
+
+    // Skip to first token
+    lexer_next(lexer);
+
+    int result = eval_expr(lexer);
+
+    print_int(result);
+    result
+}
