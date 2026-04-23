@@ -240,6 +240,55 @@ block {
   block {
   }
 }
+call malloc_int (
+)
+call free_int (
+)
+struct Vector {
+  Int size;
+  Int capacity;
+  Pointer(Int, "Heap", None) data;
+}
+block {
+  alloc<Named("Vector"), None> (
+    block {
+    },
+    load cap,
+    call malloc_int (
+      block {
+      },
+    ),
+  )
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  put (
+    block {
+    }  ,
+    load val  )
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+block {
+  put (
+    block {
+    }  ,
+    block {
+    }  )
+}
 call malloc_ptr (
 )
 call free_ptr (
@@ -339,6 +388,171 @@ block {
     load closer  ,
     block {
     }  )
+}
+struct ListNode {
+  Int val;
+  Optic(Optic(Named("ListNode"), None, None, None), None, None, None) next;
+}
+struct List {
+  Optic(Optic(Named("ListNode"), None, None, None), None, None, None) head;
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+struct MapEntry {
+  Int key;
+  Int value;
+}
+struct MapNode {
+  Named("MapEntry") entry;
+  Optic(Optic(Named("MapNode"), None, None, None), None, None, None) next;
+}
+struct Map {
+  Optic(Optic(Named("MapNode"), None, None, None), None, None, None) head;
+}
+block {
+  block {
+  }
+}
+block {
+  block {
+  }
+}
+struct ByteBuf {
+  Int capacity;
+  Int size;
+  Pointer(Char, "Heap", None) data;
+}
+struct TlsState {
+  Int version;
+  Int handshake_complete;
+  Int session_id;
+}
+struct HttpState {
+  Int method;
+  Int status;
+  Int keep_alive;
+}
+struct HttpConnection {
+  Named("ByteBuf") in_buffer;
+  Named("ByteBuf") out_buffer;
+  Named("TlsState") tls;
+  Named("HttpState") http;
+}
+block {
+  load conn
+}
+block {
+  load conn
+}
+block {
+  block {
+  }
+  block {
+  }
+  block {
+  }
+  block {
+  }
+  get (
+    load pipeline  )
+}
+struct Node {
+  Int id;
+  Int kind;
+  Named("String") lexeme;
+  Named("PtrVector") children;
+  Optic(Optic(Named("Node"), None, None, None), None, None, None) parent;
+  Optic(Optic(Named("Node"), None, None, None), None, None, None) next;
+  Named("String") source_file;
+  Int line_number;
+}
+protocol NodeSession {
+  state Parsed {
+    Optic(Optic(Named("Symbol"), None, None, None), None, None, None) resolve;
+  }
+  state Resolved {
+    Optic(Optic(Named("Type"), None, None, None), None, None, None) typecheck;
+  }
+  state Typed {
+    Optic(Optic(Named("IR"), None, None, None), None, None, None) lower;
+  }
+  state Lowered {
+  }
+}
+block {
+  block {
+    block {
+    }
+    load s
+  }
+}
+block {
+  block {
+    block {
+    }
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    put (
+      block {
+      }    ,
+      block {
+      }    )
+    load t
+  }
+}
+block {
+  block {
+    block {
+    }
+    load ir
+  }
+}
+struct Symbol {
+  Named("String") name;
+  Int scope_id;
+  Pointer(Named("Unit"), "Heap", None) node_ref;
+}
+struct SymbolTable {
+  Named("PtrVector") symbols;
+}
+block {
+  alloc<Named("SymbolTable"), None> (
+    call ptr_vector_new (
+      block {
+      },
+    ),
+  )
+}
+block {
+  call ptr_vector_push (
+    block {
+    },
+    load sym,
+  )
+}
+struct TypeIR {
+  Named("String") kind;
+  Int size;
+  Named("PtrVector") params;
+}
+struct IR {
+  Int opcode;
+  Int value;
+  Named("PtrVector") inputs;
 }
 struct Token {
   Int tag;

@@ -1,6 +1,7 @@
 use crate::cir::*;
 use crate::ast::*;
 use std::collections::HashMap;
+use std::collections::HashMap;
 
 pub struct CodeGenerator {
     temp_count: u32,
@@ -39,7 +40,7 @@ impl CodeGenerator {
         out.push_str("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:128-n8:16:32:64-S128\"\n");
         out.push_str("target triple = \"x86_64-pc-linux-gnu\"\n\n");
 
-        // Generate extern declarations only
+        // Generate extern declarations
         for decl in &prog.decls {
             if let Decl::ExternC(extern_decls) = decl {
                 for ext_decl in extern_decls {
@@ -47,6 +48,14 @@ impl CodeGenerator {
                         out.push_str(&self.gen_extern_func(name, params, ret_type));
                     }
                 }
+            }
+        }
+
+        // Generate global variables
+        for decl in &prog.decls {
+            if let Decl::Global(name, ty, _) = decl {
+                let llvm_ty = self.type_to_llvm(ty);
+                out.push_str(&format!("@{} = global {} 0\n", name, llvm_ty));
             }
         }
 
@@ -98,14 +107,39 @@ impl CodeGenerator {
         }
 
         // Generate body
-        out.push_str(&self.gen_expr(body, 1));
-
-        // Default return if not specified
-        if !matches!(body, Expr::Return(_)) {
+        if matches!(body, Expr::Return(_)) {
+            // Explicit return statement
+            out.push_str(&self.gen_expr(body, 1));
+        } else if matches!(body, Expr::Block(_)) {
+            if let Expr::Block(exprs) = body {
+                if exprs.len() == 1 && !matches!(exprs[0], Expr::Return(_)) {
+                    // Single expression block - treat as expression body
+                    let (code, val) = self.gen_expr_value(&exprs[0], 1);
+                    out.push_str(&code);
+                    if ret_type == &Type::Void {
+                        out.push_str("  ret void\n");
+                    } else {
+                        out.push_str(&format!("  ret i32 {}\n", val));
+                    }
+                } else {
+                    // Block body
+                    out.push_str(&self.gen_expr(body, 1));
+                    // Default return
+                    if ret_type == &Type::Void {
+                        out.push_str("  ret void\n");
+                    } else {
+                        out.push_str("  ret i32 0\n");
+                    }
+                }
+            }
+        } else {
+            // Expression body - generate code and return result
+            let (code, val) = self.gen_expr_value(body, 1);
+            out.push_str(&code);
             if ret_type == &Type::Void {
                 out.push_str("  ret void\n");
             } else {
-                out.push_str("  ret i32 0\n"); // Default return
+                out.push_str(&format!("  ret i32 {}\n", val));
             }
         }
 
@@ -120,42 +154,27 @@ impl CodeGenerator {
                 // Variable access doesn't generate code by itself
                 String::new()
             }
-            Expr::BinOp(_, left, right) => {
+            Expr::BinOp(_, _, _) => {
                 let (code, _) = self.gen_expr_value(expr, indent);
                 code
             }
+            Expr::Put(target, value) => {
+                let (value_code, value_val) = self.gen_expr_value(value, indent);
+                if let Expr::Var(var_name) = &**target {
+                    format!("{}  store i32 {}, i32* @{}", value_code, value_val, var_name)
+                } else {
+                    // For now, only handle global variable assignments
+                    String::new()
+                }
+            }
             Expr::Call(callee, args) => {
-                if let Expr::Var(_) = &**callee {
+                if let Expr::Var(func_name) = &**callee {
                     let (code, _) = self.gen_expr_value(expr, indent);
                     code
                 } else {
                     String::new()
                 }
             }
-
-                    }
-
-                    let ret_type_opt = self.function_ret_types.get(func_name).cloned();
-                    match ret_type_opt {
-                        Some(Type::Void) => {
-                            out.push_str(&format!("{}  call void @{}({})\n",
-                                indent_str, func_name, arg_strs.join(", ")));
-                        }
-                        Some(ret_type) => {
-                            let temp = self.new_temp();
-                            out.push_str(&format!("{}  %{} = call {} @{}({})\n",
-                                indent_str, temp, self.type_to_llvm(&ret_type), func_name, arg_strs.join(", ")));
-                        }
-                        None => {
-                            // Fallback, assume void
-                            out.push_str(&format!("{}  call void @{}({})\n",
-                                indent_str, func_name, arg_strs.join(", ")));
-                        }
-                    }
-                    out
-                } else {
-                    String::new()
-                }
             }
             Expr::Return(expr) => {
                 let (code, val) = self.gen_expr_value(expr, indent);
@@ -210,6 +229,15 @@ impl CodeGenerator {
                     left_code, right_code, temp, op, left_val, right_val);
                 (code, format!("%{}", temp))
             }
+            Expr::Put(target, value) => {
+                let (value_code, value_val) = self.gen_expr_value(value, indent);
+                if let Expr::Var(var_name) = &**target {
+                    let code = format!("{}  store i32 {}, i32* @{}", value_code, value_val, var_name);
+                    (code, "0".to_string()) // Assignment doesn't have a value
+                } else {
+                    ("".to_string(), "0".to_string())
+                }
+            }
             Expr::Call(callee, args) => {
                 if let Expr::Var(func_name) = &**callee {
                     let mut arg_codes = String::new();
@@ -221,11 +249,45 @@ impl CodeGenerator {
                         arg_vals.push(arg_val);
                     }
 
-                    let temp = self.new_temp();
+                    if let Some(ret_type) = self.function_ret_types.get(func_name) {
+                        if *ret_type == Type::Void {
+                            let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
+                            let code = format!("{}  call void @{}({})\n",
+                                arg_codes, func_name, arg_str);
+                            (code, "0".to_string())
+                        } else {
+                            let temp = self.new_temp();
+                            let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
+                            let code = format!("{}  %{} = call i32 @{}({})\n",
+                                arg_codes, temp, func_name, arg_str);
+                            (code, format!("%{}", temp))
+                        }
+                    } else {
+                        // Default to i32 return
+                        let temp = self.new_temp();
+                        let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
+                        let code = format!("{}  %{} = call i32 @{}({})\n",
+                            arg_codes, temp, func_name, arg_str);
+                        (code, format!("%{}", temp))
+                    }
+                } else {
+                    ("".to_string(), "0".to_string())
+                }
+            }
+
                     let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
-                    let code = format!("{}  %{} = call i32 @{}({})\n",
-                        arg_codes, temp, func_name, arg_str);
-                    (code, format!("%{}", temp))
+
+                    if func_name == "print_int" {
+                        // print_int is void
+                        let code = format!("{}  call void @{}({})\n",
+                            arg_codes, func_name, arg_str);
+                        (code, "0".to_string()) // Dummy value since void
+                    } else {
+                        let temp = self.new_temp();
+                        let code = format!("{}  %{} = call i32 @{}({})\n",
+                            arg_codes, temp, func_name, arg_str);
+                        (code, format!("%{}", temp))
+                    }
                 } else {
                     ("".to_string(), "0".to_string())
                 }

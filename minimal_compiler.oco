@@ -2,42 +2,45 @@
 
 extern "C" {
     void print_int(int val);
-    void* malloc(int size);
-    void free(void* ptr);
 }
 
-// Global lexer state
-char* input;
-int pos;
-int current_token;
-
-// Lexer functions
-void lexer_init(char* src) {
-    input := src;
-    pos := 0;
-    current_token := 0;
+// Lexer state structure
+struct LexerState {
+    char* input;
+    int pos;
+    int current_token;
 }
 
-int lexer_next() {
-    if (input[pos] == 0) {
-        current_token := 999;  // EOF
+// Create lexer state
+LexerState* lexer_new(char* src) {
+    LexerState* l = alloc<LexerState>();
+    l.input := src;
+    l.pos := 0;
+    l.current_token := 0;
+    l
+}
+
+// Get next token
+int lexer_next(LexerState* l) {
+    if (l.input[l.pos] == 0) {
+        l.current_token := 999;  // EOF
         999
     } else {
-        if (input[pos] >= '0' && input[pos] <= '9') {
+        if (l.input[l.pos] >= '0' && l.input[l.pos] <= '9') {
             int val = 0;
-            while (input[pos] >= '0' && input[pos] <= '9') {
-                val := val * 10 + (input[pos] - '0');
-                pos := pos + 1;
+            while (l.input[l.pos] >= '0' && l.input[l.pos] <= '9') {
+                val := val * 10 + (l.input[l.pos] - '0');
+                l.pos := l.pos + 1;
             }
-            current_token := val;
+            l.current_token := val;
             1  // TOK_INT
         } else {
-            if (input[pos] == '+') {
-                pos := pos + 1;
-                current_token := 0;
+            if (l.input[l.pos] == '+') {
+                l.pos := l.pos + 1;
+                l.current_token := 0;
                 2  // TOK_PLUS
             } else {
-                pos := pos + 1;
+                l.pos := l.pos + 1;
                 0  // Skip unknown
             }
         }
@@ -45,13 +48,13 @@ int lexer_next() {
 }
 
 // Simple evaluator (direct interpretation)
-int eval_expr() {
-    int left = current_token;
-    lexer_next();
+int eval_expr(LexerState* l) {
+    int left = l.current_token;
+    lexer_next(l);
 
-    if (current_token == 2) {  // TOK_PLUS
-        lexer_next();
-        int right = eval_expr();
+    if (l.current_token == 2) {  // TOK_PLUS
+        lexer_next(l);
+        int right = eval_expr(l);
         left + right
     } else {
         left
@@ -60,12 +63,12 @@ int eval_expr() {
 
 // Main compiler function
 int compile(char* source) {
-    lexer_init(source);
+    LexerState* lexer = lexer_new(source);
 
     // Skip to first token
-    lexer_next();
+    lexer_next(lexer);
 
-    int result = eval_expr();
+    int result = eval_expr(lexer);
 
     print_int(result);
     result

@@ -161,25 +161,18 @@ String codegen_icmp(String pred, String ty, String lhs, String rhs) {
 
 // Generate phi
 String codegen_phi(String ty, String first_label, String first_val, String second_label, String second_val) {
-    string_concat(
-        string_concat(
-            string_concat(
-                string_concat(
-                    string_concat(
-                        string_concat(
-                            string_concat(
-                                string_concat(
-                                    string_concat(
-                                        alloc<String>(4, alloc<char,Normal>(4)),
-                                        ty),
-                                    alloc<String>(1, alloc<char,Normal>(1))),
-                                first_label),
-                            alloc<String>(2, alloc<char,Normal>(2))),
-                        first_val),
-                    alloc<String>(1, alloc<char,Normal>(1))),
-                second_label),
-            alloc<String>(2, alloc<char,Normal>(2))),
-        string_concat(second_val, alloc<String>(1, alloc<char,Normal>(1))))
+    string_concat(string_concat(string_concat(
+        string_concat(string_concat(
+            alloc<String>(4, alloc<char,Normal>(4)),
+            ty),
+        alloc<String>(1, alloc<char,Normal>(1))),
+        string_concat(first_label,
+        string_concat(alloc<String>(2, alloc<char,Normal>(2)),
+        string_concat(first_val,
+        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
+        second_label))),
+        string_concat(alloc<String>(2, alloc<char,Normal>(2)), second_val))),
+        alloc<String>(1, alloc<char,Normal>(1)))
 }
 
 // Generate call

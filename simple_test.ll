@@ -9,11 +9,13 @@ define i32 @add(i32 %x, i32 %y) {
   store i32 %x, i32* %t1
   %t2 = alloca i32
   store i32 %y, i32* %t2
-  ret i32 0
+  %t3 = add i32 %x, %y
+  ret i32 %t3
 }
 
-define void @main() {
-    call void @print_int(i32 0)
+define void @optico_main() {
+  %t4 = call i32 @add(i32 1, i32 2)
+  call void @print_int(i32 %t4)
   ret void
 }
 
