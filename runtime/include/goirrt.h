@@ -40,9 +40,22 @@ void __go_check_free(void* p, go_grade_t g);
 void __go_shadow_store(void* slot_addr, go_grade_t g);
 go_grade_t __go_shadow_load(void* slot_addr);
 
-// memcpy policy
+// memcpy/memmove/memset
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind);
+void __go_memset(void* dst, go_grade_t gdst, int val, size_t n);
+
+// Provenance policy
+void __go_prov_expose(const void* p, go_grade_t g);
+
+typedef struct {
+    void* ptr;
+    go_grade_t g;
+} itp_res_t;
+
+itp_res_t __go_inttoptr_resolve(uint64_t i, uint32_t policy);
 
 #ifdef __cplusplus
 }
