@@ -82,6 +82,7 @@ impl CIRLowerer {
                 }
             }
             Expr::Assign(n, e) => CIROp::Store(n.clone(), Box::new(Self::lower_expr(e))),
+            Expr::Paren(e) => Self::lower_expr(e),
             _ => CIROp::Block(vec![]),
         }
     }

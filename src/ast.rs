@@ -56,6 +56,7 @@ pub enum Expr {
     Checked(Box<Expr>),        // checked (e)
     Spawn(Box<Expr>),          // spawn { e }
     Block(Vec<Expr>),          // { e1; e2; ... }
+    Paren(Box<Expr>),          // (e)
     LocalDecl(String, Type, Box<Expr>), // τ x = e
     Assign(String, Box<Expr>), // x = e
     Return(Box<Expr>),

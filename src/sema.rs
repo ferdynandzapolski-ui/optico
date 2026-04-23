@@ -626,6 +626,7 @@ impl Sema {
                     _ => panic!("Index requires pointer or traversal type, found {:?}", ty1),
                 }
             }
+            Expr::Paren(e) => self.check_expr(e, env, res_consumed, local_resources),
         }
     }
 }

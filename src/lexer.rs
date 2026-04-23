@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     IntType, FloatType, BoolType, CharType, VoidType,
     Struct, Resource, Co, Optic, Rec, Atomic, Pointer,
