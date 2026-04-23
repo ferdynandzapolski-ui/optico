@@ -125,4 +125,43 @@ void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
     __go_check_store(dst, gdst, n);
     __go_check_load(src, gsrc, n);
     memcpy(dst, src, n);
+    // In hybrid tier, if layout_kind suggests pointers, we would iterate and copy shadow metadata.
+    // This is a simplified implementation.
+    if (layout_kind != 0) {
+        __go_trace_event(GO_EVENT_MEMCPY_TAINT, dst, gdst, "none", "memcpy with layout", dummy_site);
+    }
+}
+
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind) {
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+    memmove(dst, src, n);
+}
+
+void __go_memset(void* dst, go_grade_t gdst, int val, size_t n) {
+    __go_check_store(dst, gdst, n);
+    memset(dst, val, n);
+}
+
+void __go_prov_expose(const void* p, go_grade_t g) {
+    __go_trace_event(GO_EVENT_PROV_EXPOSE, p, g, "prov", "pointer exposed to integer", dummy_site);
+}
+
+itp_res_t __go_inttoptr_resolve(uint64_t i, uint32_t policy) {
+    itp_res_t res;
+    res.ptr = (void*)(uintptr_t)i;
+    // Simplified resolution: return a TOP grade for now.
+    // A full implementation would check the exposure set.
+    res.g.base = 0;
+    res.g.end = -1ULL;
+    res.g.perms = 0xF;
+    res.g.alloc_id = 0;
+    res.g.epoch = 0;
+    res.g.prov_tag = 0;
+    res.g.alias_tok = 0;
+    res.g.flags = 0;
+
+    __go_trace_event(GO_EVENT_INTTOPTR_RESOLVE, res.ptr, res.g, "prov", "integer resolved to pointer", dummy_site);
+    return res;
 }
