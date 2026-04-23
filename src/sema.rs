@@ -279,6 +279,11 @@ impl Sema {
                 }
                 return Type::Void;
             }
+            Expr::FieldAssign(base, value) => {
+                let _base_ty = self.check_expr(base, env, res_consumed, local_resources);
+                let _value_ty = self.check_expr(value, env, res_consumed, local_resources);
+                Type::Void
+            }
             Expr::Var(n) => {
                 if n == "is_null" { return Type::Int; }
                 if let Some(dur) = self.resource_durability.get(n).cloned() {

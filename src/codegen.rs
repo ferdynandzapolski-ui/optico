@@ -190,6 +190,11 @@ impl CodeGenerator {
                     String::new()
                 }
             }
+            Expr::FieldAssign(base, value) => {
+                let (base_code, base_ptr) = self.gen_expr_value(base, indent);
+                let (value_code, value_val) = self.gen_expr_value(value, indent);
+                format!("{}{}  store i32 {}, i32* %{}\n", indent_str, value_code, value_val, base_ptr)
+            }
             Expr::If(cond, then_branch, else_branch) => {
                 let (cond_code, cond_val) = self.gen_expr_value(cond, indent);
                 let then_label = format!("then_{}", self.temp_count);
