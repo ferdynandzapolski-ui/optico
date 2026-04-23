@@ -1,5 +1,15 @@
 // std/io.oco - Input/Output resources for OptiCo v0.3
 
+// C standard library file I/O declarations
+extern "C" {
+    void* fopen(char* path, char* mode);
+    int fclose(void* file);
+    int fread(void* ptr, int size, int count, void* file);
+    int fwrite(void* ptr, int size, int count, void* file);
+    int fseek(void* file, int offset, int whence);
+    int ftell(void* file);
+}
+
 protocol File {
     state Open {
         optic int* read;
@@ -47,4 +57,76 @@ File[Open] file_open(String path) {
 
 void file_close(optic int*!f closer) {
     closer := 0;
+}
+
+// Read entire file content into a String
+// Returns empty string on error
+String read_file(String path) {
+    void* file = fopen(path.data, "rb");
+    if (file == 0) {
+        String result;
+        result.len = 0;
+        result.data = 0;
+        return result;
+    }
+
+    fseek(file, 0, 2);
+    int size = ftell(file);
+    fseek(file, 0, 0);
+
+    if (size < 0) {
+        fclose(file);
+        String result;
+        result.len = 0;
+        result.data = 0;
+        return result;
+    }
+
+    pointer<char, Normal> buf = alloc<char, Normal>(size + 1);
+    if (buf == 0) {
+        fclose(file);
+        String result;
+        result.len = 0;
+        result.data = 0;
+        return result;
+    }
+
+    int bytes_read = fread(buf, 1, size, file);
+    fclose(file);
+
+    if (bytes_read < 0) {
+        String result;
+        result.len = 0;
+        result.data = 0;
+        return result;
+    }
+
+    buf[bytes_read] = 0;
+
+    String result;
+    result.len = bytes_read;
+    result.data = buf;
+    return result;
+}
+
+// Write string content to file
+// Returns 0 on success, non-zero on error
+int write_file(String path, String content) {
+    void* file = fopen(path.data, "wb");
+    if (file == 0) {
+        return -1;
+    }
+
+    if (content.len <= 0) {
+        fclose(file);
+        return 0;
+    }
+
+    int bytes_written = fwrite(content.data, 1, content.len, file);
+    fclose(file);
+
+    if (bytes_written == content.len) {
+        return 0;
+    }
+    return -1;
 }

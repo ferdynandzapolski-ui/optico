@@ -1,0 +1,18 @@
+// test_expressions.oco - Test basic expressions for self-hosting compiler
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int mul(int a, int b) {
+    return a * b;
+}
+
+int main() {
+    int x = 10;
+    int y = 20;
+    int sum = add(x, y);
+    int product = mul(x, y);
+    int result = sum + product;
+    return result;
+}

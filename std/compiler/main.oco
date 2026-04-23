@@ -1,144 +1,179 @@
 // std/compiler/main.oco - Main entry point for self-hosted OptiCo compiler
-// This is the bootstrap compiler that compiles itself
+// This compiler compiles OptiCo source code to LLVM IR
 
-// Import all compiler modules
-// (In self-hosted mode, these are compiled together)
+// Import all compiler modules (these would be linked together)
+// The actual functions are defined in separate files:
+// - lexer.oco: Tokenization
+// - parser.oco: AST construction  
+// - sema.oco: Semantic analysis
+// - codegen.oco: LLVM IR generation
+
+// External function declarations (would be provided by runtime)
+// For now, these are stubs that would be linked with C runtime
+extern "C" {
+    int print_int(int n);
+    int print_str(String s);
+    String read_file(String path);
+    int write_file(String path, String content);
+}
 
 // Compiler configuration
 struct CompilerConfig {
     String input_file;
     String output_file;
-    bool emit_llvm;
-    bool run_passes;
-    String pass_pipeline;
+    int emit_llvm;        // 1 = true, 0 = false
+    int run_goir;         // 1 = run GOIR passes, 0 = false
+    String goir_tier;      // "diag", "hybrid", "cap"
 }
 
 CompilerConfig config_default() {
     alloc<CompilerConfig>(
-        alloc<String>(0, alloc<char,Normal>(0)),  // input_file
-        alloc<String>(0, alloc<char,Normal>(0)),  // output_file
-        true,                                       // emit_llvm
-        false,                                      // run_passes
-        alloc<String>(0, alloc<char,Normal>(0))   // pass_pipeline
+        string_slice("", 0, 0),   // input_file
+        string_slice("", 0, 0),   // output_file
+        1,                          // emit_llvm (default true)
+        0,                          // run_goir (default false)
+        string_slice("diag", 0, 4) // goir_tier
     )
 }
 
-// Parse command line arguments
-void config_parse(CompilerConfig cfg, PtrVector args) {
-    {
-        int i = 1;
-        config_parse_loop(cfg, args, i)
-    }
-}
-
-void config_parse_loop(CompilerConfig cfg, PtrVector args, int i) {
-    if (i < ptr_vector_size(args)) {
-        {
-            String arg = ptr_vector_get(args, i);
-            if (string_equal(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
-                // -o
-                cfg.output_file := ptr_vector_get(args, i + 1);
-                config_parse_loop(cfg, args, i + 2)
+// Parse command line arguments from a simple array
+// Format: ["compiler", "file.oco", "-o", "output.ll", "--goir-tier=diag"]
+void config_parse(CompilerConfig cfg, int argc, String* argv) {
+    int i = 1;  // Skip program name
+    while (i < argc) {
+        String arg = argv[i];
+        int arg_len = string_len(arg);
+        
+        if (string_starts_with(arg, string_slice("-o", 0, 2))) {
+            if (i + 1 < argc) {
+                cfg.output_file := argv[i + 1];
+                i := i + 2
             } else {
-                if (string_equal(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
-                    // --emit-llvm
-                    cfg.emit_llvm := true;
-                    config_parse_loop(cfg, args, i + 1)
+                i := i + 1
+            }
+        } else {
+            if (string_equal(arg, string_slice("--no-llvm", 0, 9))) {
+                cfg.emit_llvm := 0;
+                i := i + 1
+            } else {
+                if (string_starts_with(arg, string_slice("--goir-tier=", 0, 12))) {
+                    // Extract tier value
+                    cfg.goir_tier := string_slice(arg, 12, string_len(arg) - 12);
+                    i := i + 1
                 } else {
-                    if (string_starts_with(arg, alloc<String>(2, alloc<char,Normal>(2)))) {
-                        cfg.input_file := arg;
-                        config_parse_loop(cfg, args, i + 1)
-                    } else {
-                        config_parse_loop(cfg, args, i + 1)
-                    }
+                    // Assume it's an input file
+                    if (cfg.input_file == string_slice("", 0, 0)) {
+                        cfg.input_file := arg
+                    };
+                    i := i + 1
                 }
             }
         }
-    } else {
-        0
     }
-}
-
-// Read entire file into string
-String file_read_all(String path) {
-    {
-        int len = 0;  // Would use file size in real implementation
-        pointer<char, Normal> data = alloc<char, Normal>(1024);
-        // Simplified: return empty string
-        // Real implementation would use C read()/fread()
-        alloc<String>(0, data)
-    }
-}
-
-// Write string to file
-void file_write_all(String path, String content) {
-    // Simplified: would use C write()/fwrite()
-    0
 }
 
 // Main compilation pipeline
+// Returns 0 on success, non-zero on error
 int compile(CompilerConfig cfg) {
-    {
-        // 1. Read input file
-        String source = file_read_all(cfg.input_file);
-        
-        // 2. Lex source into tokens
-        Lexer lexer = alloc<Lexer>(source, 0, 1);
-        PtrVector tokens = ptr_vector_new(256);
-        
-        // Lex all tokens
-        lexer_lex_all(lexer, tokens);
-        
-        // 3. Parse tokens into AST
-        Parser parser = alloc<Parser>(lexer, ptr_vector_get(tokens, 0));
-        Node* ast = parser_parse_program(parser);
-        
-        // 4. Semantic analysis
-        // (Would include symbol table building, type checking)
-        
-        // 5. Generate LLVM IR
-        CodegenContext ctx = codegen_new();
-        String llvm_ir = codegen_generate(ctx, ast);
-        
-        // 6. Write output
-        if (cfg.emit_llvm) {
-            file_write_all(cfg.output_file, llvm_ir)
+    // Check if input file is specified
+    if (cfg.input_file == string_slice("", 0, 0)) {
+        print_str(string_slice("Usage: optico <file.oco> [-o output.ll] [--goir-tier=<diag|hybrid|cap>]\n", 0, 90));
+        return 1
+    };
+    
+    // 1. Read input file
+    print_str(string_slice("Reading ", 0, 8));
+    print_str(cfg.input_file);
+    print_str(string_slice("\n", 0, 1));
+    
+    String source = read_file(cfg.input_file);
+    if (source == string_slice("", 0, 0)) {
+        print_str(string_slice("Error: Could not read input file\n", 0, 37));
+        return 1
+    };
+    
+    // 2. Lexical analysis
+    print_str(string_slice("Lexing...\n", 0, 10));
+    Lexer lexer = alloc<Lexer>(source, 0, 1);
+    PtrVector tokens = ptr_vector_new(1024);
+    lexer_lex_all(lexer, tokens);
+    
+    // 3. Parsing
+    print_str(string_slice("Parsing...\n", 0, 11));
+    Parser parser = alloc<Parser>(lexer, lexer_current_token(lexer));
+    Node* ast = parser_parse_program(parser);
+    
+    // 4. Semantic analysis
+    print_str(string_slice("Semantic analysis...\n", 0, 21));
+    SymbolTable st = sema_new_table();
+    sema_check_program(st, ast);
+    
+    // 5. Code generation (LLVM IR)
+    print_str(string_slice("Generating LLVM IR...\n", 0, 23));
+    CodegenContext ctx = codegen_new();
+    String llvm_ir = codegen_generate(ctx, ast);
+    
+    // 6. Output
+    if (cfg.emit_llvm) {
+        if (cfg.output_file == string_slice("", 0, 0)) {
+            // Default output: input file with .ll extension
+            cfg.output_file := string_concat(
+                string_slice(cfg.input_file, 0, string_len(cfg.input_file) - 4),
+                string_slice(".ll", 0, 3)
+            )
         };
         
-        0  // Success
-    }
-}
-
-void lexer_lex_all(Lexer lexer, PtrVector tokens) {
-    {
-        Token t = lexer_next_token(lexer);
-        lexer_lex_loop(lexer, tokens, t)
-    }
-}
-
-void lexer_lex_loop(Lexer lexer, PtrVector tokens, Token t) {
-    if (t.tag != 0) {  // Not EOF
-        {
-            ptr_vector_push(tokens, t);
-            Token next_tok = lexer_next_token(lexer);
-            lexer_lex_loop(lexer, tokens, next_tok)
-        }
-    } else {
-        0
-    }
-}
-
-// Entry point
-int main(PtrVector args) {
-    {
-        CompilerConfig cfg = config_default();
-        config_parse(cfg, args);
+        print_str(string_slice("Writing ", 0, 8));
+        print_str(cfg.output_file);
+        print_str(string_slice("\n", 0, 1));
         
-        if (string_equal(cfg.input_file, alloc<String>(0, alloc<char,Normal>(0)))) {
-            // No input file specified, print usage
-            0
+        write_file(cfg.output_file, llvm_ir)
+    };
+    
+    // 7. Optionally run GOIR pipeline (would be external process)
+    if (cfg.run_goir) {
+        print_str(string_slice("GOIR passes would run here with tier: ", 0, 41));
+        print_str(cfg.goir_tier);
+        print_str(string_slice("\n", 0, 1))
+    };
+    
+    print_str(string_slice("Compilation successful!\n", 0, 25));
+    0  // Success
+}
+
+// Helper: lex all tokens
+void lexer_lex_all(Lexer l, PtrVector tokens) {
+    {
+        Token t = lexer_next_token(l);
+        if (t.tag != 0) {  // Not EOF
+            ptr_vector_push(tokens, t);
+            lexer_lex_all(l, tokens)
         } else {
-            compile(cfg)
+            0
         }
     }
+}
+
+// Entry point for standalone compilation
+// In a real self-hosted compiler, this would be called from main()
+int compile_file(String filename) {
+    CompilerConfig cfg = config_default();
+    cfg.input_file := filename;
+    compile(cfg)
+}
+
+// Test function: compile a simple expression
+int test_simple() {
+    CompilerConfig cfg = config_default();
+    cfg.input_file := string_slice("test_minimal.oco", 0, 18);
+    compile(cfg)
+}
+
+// Main function (for testing the compiler itself)
+// When the self-hosted compiler is built as a standalone binary,
+// this function would be the entry point
+int main(int argc, String* argv) {
+    CompilerConfig cfg = config_default();
+    config_parse(cfg, argc, argv);
+    compile(cfg)
 }

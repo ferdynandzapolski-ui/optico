@@ -1,0 +1,41 @@
+// test_comparison.oco - Test comparison operators for self-hosting compiler
+
+int max(int a, int b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+int min(int a, int b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+int main() {
+    int x = 10;
+    int y = 20;
+    int a = 0;
+    int b = 0;
+    
+    // Test == 
+    if (x == 10) {
+        a = 1;
+    };
+    
+    // Test !=
+    if (y != 10) {
+        b = 1;
+    };
+    
+    // Test >= and <=
+    if (x <= y && y >= 10) {
+        a = a + b;
+    };
+    
+    return a;
+}

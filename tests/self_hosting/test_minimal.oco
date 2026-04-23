@@ -1,0 +1,11 @@
+// test_minimal.oco - Minimal test program for self-hosting compiler
+// This program should compile successfully with both:
+// 1. Rust bootstrap compiler (src/main.rs)
+// 2. Self-hosted compiler (std/compiler/*.oco)
+
+int main() {
+    int x = 10;
+    int y = 20;
+    int result = x + y;
+    return result;
+}
