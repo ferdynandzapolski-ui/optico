@@ -1,0 +1,32 @@
+// functions_test.oco - Test functions with parameters and returns
+
+extern "C" {
+    void print_int(int val);
+}
+
+// Function with parameters and return
+int add(int x, int y) {
+    x + y
+}
+
+// Function calling other functions
+int add_three(int a, int b, int c) {
+    add(add(a, b), c)
+}
+
+// Void function
+void print_sum(int x, int y) {
+    print_int(add(x, y));
+}
+
+// Simple function
+int multiply(int x, int y) {
+    x * y
+}
+
+// Main test
+void test_functions() {
+    print_sum(5, 3);           // Should print 8
+    print_int(add_three(1, 2, 3));  // Should print 6
+    print_int(multiply(6, 7)); // Should print 42
+}

@@ -12,9 +12,12 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
-        if arg.starts_with("--goir-tier=") {
+        if arg == "--debug-ast" {
+            debug_ast = true;
+        } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
@@ -38,6 +41,15 @@ fn main() {
 
     let prog = Program { decls: all_decls };
     let filepath = input_files.last().unwrap();
+
+    // Debug: Print AST
+    if debug_ast {
+        println!("--- AST for {} ---", filepath);
+        for decl in &prog.decls {
+            println!("{:?}", decl);
+        }
+        println!();
+    }
 
     let mut sema = Sema::new();
     if Path::new("beliefs.json").exists() {

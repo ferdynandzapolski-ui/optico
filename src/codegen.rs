@@ -1,12 +1,12 @@
 use crate::cir::*;
 use crate::ast::*;
 use std::collections::HashMap;
-use std::collections::HashMap;
 
 pub struct CodeGenerator {
     temp_count: u32,
     func_count: u32,
     function_ret_types: HashMap<String, Type>,
+    local_vars: HashMap<String, String>, // var_name -> llvm_temp_name
 }
 
 impl CodeGenerator {
@@ -15,6 +15,7 @@ impl CodeGenerator {
             temp_count: 0,
             func_count: 0,
             function_ret_types: HashMap::new(),
+            local_vars: HashMap::new(),
         }
     }
 
@@ -90,6 +91,9 @@ impl CodeGenerator {
     }
 
     fn gen_func_def(&mut self, name: &str, params: &[(String, Type)], ret_type: &Type, body: &Expr) -> String {
+        // Clear local variables for new function
+        self.local_vars.clear();
+
         let ret_ty = self.type_to_llvm(ret_type);
         let param_str = params.iter()
             .map(|(n, ty)| format!("{} %{}", self.type_to_llvm(ty), n))
@@ -104,6 +108,8 @@ impl CodeGenerator {
             let temp = self.new_temp();
             out.push_str(&format!("  %{} = alloca {}\n", temp, llvm_ty));
             out.push_str(&format!("  store {} %{}, {}* %{}\n", llvm_ty, param_name, llvm_ty, temp));
+            // Parameters are also local variables
+            self.local_vars.insert(param_name.clone(), temp);
         }
 
         // Generate body
@@ -154,6 +160,23 @@ impl CodeGenerator {
                 // Variable access doesn't generate code by itself
                 String::new()
             }
+            Expr::LocalDecl(var_name, var_type, init_expr) => {
+                let llvm_ty = self.type_to_llvm(var_type);
+                let temp = self.new_temp();
+                let (init_code, init_val) = self.gen_expr_value(init_expr, indent);
+                self.local_vars.insert(var_name.clone(), temp.clone());
+                format!("{}  %{} = alloca {}\n{}  store {} {}, {}* %{}\n",
+                    indent_str, temp, llvm_ty, init_code, llvm_ty, init_val, llvm_ty, temp)
+            }
+            Expr::Assign(var_name, value_expr) => {
+                let (value_code, value_val) = self.gen_expr_value(value_expr, indent);
+                if let Some(temp) = self.local_vars.get(var_name) {
+                    format!("{}{}  store i32 {}, i32* %{}\n", indent_str, value_code, value_val, temp)
+                } else {
+                    // Assume global for now
+                    format!("{}{}  store i32 {}, i32* @{}\n", indent_str, value_code, value_val, var_name)
+                }
+            }
             Expr::BinOp(_, _, _) => {
                 let (code, _) = self.gen_expr_value(expr, indent);
                 code
@@ -161,11 +184,62 @@ impl CodeGenerator {
             Expr::Put(target, value) => {
                 let (value_code, value_val) = self.gen_expr_value(value, indent);
                 if let Expr::Var(var_name) = &**target {
-                    format!("{}  store i32 {}, i32* @{}", value_code, value_val, var_name)
+                    format!("{}  store i32 {}, i32* @{}", indent_str, value_val, var_name)
                 } else {
                     // For now, only handle global variable assignments
                     String::new()
                 }
+            }
+            Expr::If(cond, then_branch, else_branch) => {
+                let (cond_code, cond_val) = self.gen_expr_value(cond, indent);
+                let then_label = format!("then_{}", self.temp_count);
+                let else_label = format!("else_{}", self.temp_count);
+                let end_label = format!("end_{}", self.temp_count);
+                self.temp_count += 1;
+
+                let mut code = cond_code;
+                code.push_str(&format!("{}  br i1 {}, label %{}, label %{}\n\n",
+                    "  ".repeat(indent), cond_val, then_label, else_label));
+
+                // Then branch
+                code.push_str(&format!("{}:\n", then_label));
+                code.push_str(&self.gen_expr(then_branch, indent));
+                code.push_str(&format!("{}  br label %{}\n\n", "  ".repeat(indent), end_label));
+
+                // Else branch
+                code.push_str(&format!("{}:\n", else_label));
+                if let Some(else_expr) = else_branch {
+                    code.push_str(&self.gen_expr(else_expr, indent));
+                }
+                code.push_str(&format!("{}  br label %{}\n\n", "  ".repeat(indent), end_label));
+
+                // End
+                code.push_str(&format!("{}:\n", end_label));
+                code
+            }
+            Expr::While(cond, body) => {
+                let loop_label = format!("loop_{}", self.temp_count);
+                let body_label = format!("body_{}", self.temp_count);
+                let end_label = format!("end_loop_{}", self.temp_count);
+                self.temp_count += 1;
+
+                let mut code = format!("{}  br label %{}\n\n", "  ".repeat(indent), loop_label);
+
+                // Loop condition check
+                code.push_str(&format!("{}:\n", loop_label));
+                let (cond_code, cond_val) = self.gen_expr_value(cond, indent + 1);
+                code.push_str(&cond_code);
+                code.push_str(&format!("{}  br i1 {}, label %{}, label %{}\n\n",
+                    "  ".repeat(indent + 1), cond_val, body_label, end_label));
+
+                // Loop body
+                code.push_str(&format!("{}:\n", body_label));
+                code.push_str(&self.gen_expr(body, indent + 1));
+                code.push_str(&format!("{}  br label %{}\n\n", "  ".repeat(indent + 1), loop_label));
+
+                // End of loop
+                code.push_str(&format!("{}:\n", end_label));
+                code
             }
             Expr::Call(callee, args) => {
                 if let Expr::Var(func_name) = &**callee {
@@ -174,8 +248,7 @@ impl CodeGenerator {
                 } else {
                     String::new()
                 }
-            }
-            }
+            },
             Expr::Return(expr) => {
                 let (code, val) = self.gen_expr_value(expr, indent);
                 format!("{}{}  ret i32 {}\n", code, indent_str, val)
@@ -210,24 +283,57 @@ impl CodeGenerator {
         // Returns (generated_code, result_register)
         match expr {
             Expr::ConstInt(val) => ("".to_string(), val.to_string()),
-            Expr::Var(name) => ("".to_string(), format!("%{}", name)),
+            Expr::Var(name) => {
+                if let Some(temp_name) = self.local_vars.get(name) {
+                    // Load from allocated location
+                    let load_temp = self.new_temp();
+                    let code = format!("  %{} = load i32, i32* %{}\n", load_temp, temp_name);
+                    (code, format!("%{}", load_temp))
+                } else {
+                    // Parameter or global
+                    ("".to_string(), format!("%{}", name))
+                }
+            }
             Expr::BinOp(kind, left, right) => {
                 let (left_code, left_val) = self.gen_expr_value(left, indent);
                 let (right_code, right_val) = self.gen_expr_value(right, indent);
                 let temp = self.new_temp();
 
-                let op = match kind {
-                    BinOpKind::Add => "add",
-                    BinOpKind::Sub => "sub",
-                    BinOpKind::Mul => "mul",
-                    BinOpKind::Div => "sdiv",
-                    _ => "add",
+                let (op, ret_ty) = match kind {
+                    BinOpKind::Add => ("add", "i32"),
+                    BinOpKind::Sub => ("sub", "i32"),
+                    BinOpKind::Mul => ("mul", "i32"),
+                    BinOpKind::Div => ("sdiv", "i32"),
+                    BinOpKind::Eq => ("icmp eq", "i1"),
+                    BinOpKind::Ne => ("icmp ne", "i1"),
+                    BinOpKind::Lt => ("icmp slt", "i1"),
+                    BinOpKind::Gt => ("icmp sgt", "i1"),
+                    BinOpKind::Le => ("icmp sle", "i1"),
+                    BinOpKind::Ge => ("icmp sge", "i1"),
+                    BinOpKind::And => ("and", "i32"),
+                    _ => ("add", "i32"),
                 };
 
                 let indent_str = "  ".repeat(indent);
-                let code = format!("{}{}  %{} = {} i32 {}, {}\n",
-                    left_code, right_code, temp, op, left_val, right_val);
+                let code = format!("{}{}  %{} = {} {} {}, {}\n",
+                    left_code, right_code, temp, op, ret_ty, left_val, right_val);
                 (code, format!("%{}", temp))
+            }
+            Expr::LocalDecl(var_name, var_type, init_expr) => {
+                let llvm_ty = self.type_to_llvm(var_type);
+                let temp = self.new_temp();
+                let (init_code, init_val) = self.gen_expr_value(init_expr, indent);
+                let code = format!("  %{} = alloca {}\n{}  store {} {}, {}* %{}\n",
+                    temp, llvm_ty, init_code, llvm_ty, init_val, llvm_ty, temp);
+                // Store the allocated temp for this variable
+                self.local_vars.insert(var_name.clone(), temp);
+                (code, format!("%{}", temp)) // Return the allocated pointer
+            }
+            Expr::Assign(var_name, value_expr) => {
+                let (value_code, value_val) = self.gen_expr_value(value_expr, indent);
+                // TODO: Need to track variable locations for proper assignment
+                let code = format!("{}  ; Assignment to {} = {}\n", value_code, var_name, value_val);
+                (code, "0".to_string()) // Assignment doesn't have a value
             }
             Expr::Put(target, value) => {
                 let (value_code, value_val) = self.gen_expr_value(value, indent);
@@ -266,24 +372,6 @@ impl CodeGenerator {
                         // Default to i32 return
                         let temp = self.new_temp();
                         let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
-                        let code = format!("{}  %{} = call i32 @{}({})\n",
-                            arg_codes, temp, func_name, arg_str);
-                        (code, format!("%{}", temp))
-                    }
-                } else {
-                    ("".to_string(), "0".to_string())
-                }
-            }
-
-                    let arg_str = arg_vals.iter().map(|v| format!("i32 {}", v)).collect::<Vec<_>>().join(", ");
-
-                    if func_name == "print_int" {
-                        // print_int is void
-                        let code = format!("{}  call void @{}({})\n",
-                            arg_codes, func_name, arg_str);
-                        (code, "0".to_string()) // Dummy value since void
-                    } else {
-                        let temp = self.new_temp();
                         let code = format!("{}  %{} = call i32 @{}({})\n",
                             arg_codes, temp, func_name, arg_str);
                         (code, format!("%{}", temp))
