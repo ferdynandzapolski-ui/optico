@@ -266,11 +266,8 @@ impl Sema {
             }
             Expr::Assign(n, e) => {
                 let ty = self.check_expr(e, env, res_consumed, local_resources);
-                if let Expr::BinOp(BinOpKind::Add, _, _) = &**e {
-                   self.phantom_lifetimes.insert(n.clone(), self.current_func.clone().unwrap_or("global".to_string()));
-                   env.insert(n.clone(), Type::Pointer(Box::new(Type::Int), "Stack".to_string(), None));
-                   return Type::Void;
-                }
+                // Only track phantom lifetimes for actual pointer operations, not arithmetic
+                // Phantom lifetimes should only be created when assigning stack pointers to longer-lived variables
                 self.track_malloc(n, e, local_resources);
                 if !env.contains_key(n) {
                     env.insert(n.clone(), ty.clone());
