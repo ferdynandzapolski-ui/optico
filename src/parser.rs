@@ -459,21 +459,37 @@ impl<'a> Parser<'a> {
             }
             return Expr::If(Box::new(cond), Box::new(then), els);
         }
+        if self.current_token == Token::While {
+            self.advance();
+            if matches!(&self.current_token, Token::LParen | Token::LBrace) {
+                self.advance();
+            } else {
+                panic!("Expected LParen or LBrace, found {:?}", self.current_token);
+            }
+            let cond = self.parse_expr();
+            if matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                self.advance();
+            } else {
+                panic!("Expected RParen or RBrace, found {:?}", self.current_token);
+            }
+            let body = self.parse_expr();
+            return Expr::While(Box::new(cond), Box::new(body));
+        }
 
         self.parse_put_expr()
     }
 
     fn parse_put_expr(&mut self) -> Expr {
-        let mut e = self.parse_comparison_expr();
+        let mut e = self.parse_logical_expr();
         loop {
             match &self.current_token {
                 Token::Pipe => {
                     self.advance();
-                    e = Expr::Compose(Box::new(e), Box::new(self.parse_comparison_expr()));
+                    e = Expr::Compose(Box::new(e), Box::new(self.parse_logical_expr()));
                 }
                 Token::Put => {
                     self.advance();
-                    e = Expr::Put(Box::new(e), Box::new(self.parse_comparison_expr()));
+                    e = Expr::Put(Box::new(e), Box::new(self.parse_logical_expr()));
                 }
                 _ => break,
             }
@@ -495,6 +511,19 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_additive_expr()));
+        }
+        e
+    }
+
+    fn parse_logical_expr(&mut self) -> Expr {
+        let mut e = self.parse_comparison_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::AndAnd => BinOpKind::And,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_comparison_expr()));
         }
         e
     }

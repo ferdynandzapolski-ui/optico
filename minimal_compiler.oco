@@ -1,0 +1,72 @@
+// minimal_compiler.oco - Minimal self-hosted OptiCo compiler
+
+extern "C" {
+    void print_int(int val);
+    void* malloc(int size);
+    void free(void* ptr);
+}
+
+// Global lexer state
+char* input;
+int pos;
+int current_token;
+
+// Lexer functions
+void lexer_init(char* src) {
+    input := src;
+    pos := 0;
+    current_token := 0;
+}
+
+int lexer_next() {
+    if (input[pos] == 0) {
+        current_token := 999;  // EOF
+        999
+    } else {
+        if (input[pos] >= '0' && input[pos] <= '9') {
+            int val = 0;
+            while (input[pos] >= '0' && input[pos] <= '9') {
+                val := val * 10 + (input[pos] - '0');
+                pos := pos + 1;
+            }
+            current_token := val;
+            1  // TOK_INT
+        } else {
+            if (input[pos] == '+') {
+                pos := pos + 1;
+                current_token := 0;
+                2  // TOK_PLUS
+            } else {
+                pos := pos + 1;
+                0  // Skip unknown
+            }
+        }
+    }
+}
+
+// Simple evaluator (direct interpretation)
+int eval_expr() {
+    int left = current_token;
+    lexer_next();
+
+    if (current_token == 2) {  // TOK_PLUS
+        lexer_next();
+        int right = eval_expr();
+        left + right
+    } else {
+        left
+    }
+}
+
+// Main compiler function
+int compile(char* source) {
+    lexer_init(source);
+
+    // Skip to first token
+    lexer_next();
+
+    int result = eval_expr();
+
+    print_int(result);
+    result
+}

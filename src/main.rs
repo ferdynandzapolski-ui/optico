@@ -45,14 +45,14 @@ fn main() {
     }
     sema.check_program(&prog);
 
-    let cir = CIRLowerer::lower_program(&prog);
-    let code = CodeGenerator::generate(&cir);
+    let mut codegen = CodeGenerator::new();
+    let code = codegen.generate_program(&prog);
 
     // Write generated IR to file
     let llvm_path = Path::new(filepath).with_extension("ll");
     fs::write(&llvm_path, &code).expect("Failed to write LLVM IR file");
 
-    println!("--- OptiCo CIR for {} ---", filepath);
+    println!("--- OptiCo LLVM IR for {} ---", filepath);
     println!("{}", code);
 
     if llvm_path.exists() {

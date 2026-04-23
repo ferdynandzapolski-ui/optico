@@ -1,0 +1,13 @@
+// simple_test.oco - Very simple test
+
+extern "C" {
+    void print_int(int val);
+}
+
+int add(int x, int y) {
+    x + y
+}
+
+void main() {
+    print_int(add(1, 2));
+}

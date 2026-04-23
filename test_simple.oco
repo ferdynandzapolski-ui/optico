@@ -1,0 +1,9 @@
+// test_simple.oco - Simple test program
+
+extern "C" {
+    void print_int(int val);
+}
+
+void main() {
+    print_int(42);
+}
