@@ -120,8 +120,8 @@ void lexer_lex_loop(Lexer lexer, PtrVector tokens, Token t) {
     if (t.tag != 0) {  // Not EOF
         {
             ptr_vector_push(tokens, t);
-            Token next = lexer_next_token(lexer);
-            lexer_lex_loop(lexer, tokens, next)
+            Token next_tok = lexer_next_token(lexer);
+            lexer_lex_loop(lexer, tokens, next_tok)
         }
     } else {
         0

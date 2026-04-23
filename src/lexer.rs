@@ -30,6 +30,10 @@ impl<'a> Lexer<'a> {
         Self { input, pos: 0 }
     }
 
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+
     fn peek(&self) -> Option<char> {
         self.input[self.pos..].chars().next()
     }

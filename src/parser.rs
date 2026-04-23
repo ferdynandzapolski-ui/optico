@@ -583,6 +583,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary_expr(&mut self) -> Expr {
+        println!("DEBUG parse_primary_expr: current_token = {:?}, position = {}", self.current_token, self.lexer.position());
         match &self.current_token {
             Token::LParen => {
                 self.advance();
@@ -792,20 +793,36 @@ impl<'a> Parser<'a> {
                     if self.current_token == Token::Assign {
                         self.advance();
                         Expr::Assign(name, Box::new(self.parse_expr()))
-                    } else if matches!(&self.current_token, Token::LParen | Token::LBrace) {
-                    self.advance();
-                    let mut args = Vec::new();
-                    while !matches!(&self.current_token, Token::RParen | Token::RBrace) {
-                        args.push(self.parse_expr());
-                        if self.current_token == Token::Comma {
-                            self.advance();
+                    } else if matches!(&self.current_token, Token::LParen | Token::LBrace | Token::Lt) {
+                        // Handle function calls: name(args) or generic calls: name<Type>(args)
+                        let mut type_param = None;
+                        if self.current_token == Token::Lt {
+                            self.advance();  // Advance past <
+                            if let Token::Ident(n) = &self.current_token {
+                                type_param = Some(n.clone());
+                                self.advance();  // Advance past type name
+                            }
+                            self.expect(Token::Gt);  // Expect >
                         }
-                    }
+                        // Now expect ( for function arguments
+                        if self.current_token == Token::LParen || self.current_token == Token::LBrace {
+                            self.advance();  // Advance past ( or {
+                        } else {
+                            panic!("Expected LParen after function name, found {:?}", self.current_token);
+                        }
+                        let mut args = Vec::new();
+                        while !matches!(&self.current_token, Token::RParen | Token::RBrace) {
+                            args.push(self.parse_expr());
+                            if self.current_token == Token::Comma {
+                                self.advance();
+                            }
+                        }
                         if matches!(&self.current_token, Token::RParen | Token::RBrace) {
                             self.advance();
                         } else {
                             panic!("Expected RParen or RBrace, found {:?}", self.current_token);
                         }
+                        // TODO: Store type_param in Expr::Call if needed
                         Expr::Call(Box::new(Expr::Var(name)), args)
                     } else {
                         Expr::Var(name)

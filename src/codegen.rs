@@ -285,9 +285,10 @@ impl CodeGenerator {
             Expr::ConstInt(val) => ("".to_string(), val.to_string()),
             Expr::Var(name) => {
                 if let Some(temp_name) = self.local_vars.get(name) {
-                    // Load from allocated location
+                    // Clone the temp name to avoid holding the borrow during new_temp() call
+                    let temp_name_clone = temp_name.clone();
                     let load_temp = self.new_temp();
-                    let code = format!("  %{} = load i32, i32* %{}\n", load_temp, temp_name);
+                    let code = format!("  %{} = load i32, i32* %{}\n", load_temp, temp_name_clone);
                     (code, format!("%{}", load_temp))
                 } else {
                     // Parameter or global
@@ -314,7 +315,6 @@ impl CodeGenerator {
                     _ => ("add", "i32"),
                 };
 
-                let indent_str = "  ".repeat(indent);
                 let code = format!("{}{}  %{} = {} {} {}, {}\n",
                     left_code, right_code, temp, op, ret_ty, left_val, right_val);
                 (code, format!("%{}", temp))
@@ -325,8 +325,8 @@ impl CodeGenerator {
                 let (init_code, init_val) = self.gen_expr_value(init_expr, indent);
                 let code = format!("  %{} = alloca {}\n{}  store {} {}, {}* %{}\n",
                     temp, llvm_ty, init_code, llvm_ty, init_val, llvm_ty, temp);
-                // Store the allocated temp for this variable
-                self.local_vars.insert(var_name.clone(), temp);
+                // Store the allocated temp for this variable (clone to keep ownership for return)
+                self.local_vars.insert(var_name.clone(), temp.clone());
                 (code, format!("%{}", temp)) // Return the allocated pointer
             }
             Expr::Assign(var_name, value_expr) => {
