@@ -1,0 +1,132 @@
+// minimal_self_host.oco - Minimal self-hosted OptiCo compiler
+
+extern "C" {
+    void print_int(int val);
+}
+
+// Global state
+int input_pos;
+int current_token;
+int token_value;
+
+// Initialize lexer
+void lexer_init(char* input) {
+    input_pos := 0;
+    current_token := 0;
+    token_value := 0;
+}
+
+// Get current character
+int get_char(char* input) {
+    input[input_pos]
+}
+
+// Advance position
+void advance() {
+    input_pos := input_pos + 1;
+}
+
+// Skip whitespace
+void skip_whitespace(char* input) {
+    int c = get_char(input);
+    if (c == 32) {
+        advance();
+    } else {
+        if (c == 9) {
+            advance();
+        } else {
+            if (c == 10) {
+                advance();
+            }
+        }
+    }
+    c = get_char(input);
+    if (c == 32) {
+        advance();
+    } else {
+        if (c == 9) {
+            advance();
+        } else {
+            if (c == 10) {
+                advance();
+            }
+        }
+    }
+}
+
+// Read number
+void read_number(char* input) {
+    token_value := 0;
+    int c = get_char(input);
+    if (c >= 48) {
+        if (c <= 57) {
+            token_value := token_value * 10 + (c - 48);
+            advance();
+        }
+    }
+    c = get_char(input);
+    if (c >= 48) {
+        if (c <= 57) {
+            token_value := token_value * 10 + (c - 48);
+            advance();
+        }
+    }
+}
+
+// Lex token
+void lex(char* input) {
+    skip_whitespace(input);
+
+    int c = get_char(input);
+
+    if (c == 0) {
+        current_token := 0;  // EOF
+    } else {
+        if (c >= 48 && c <= 57) {
+            read_number(input);
+            current_token := 1;  // INT
+        } else {
+            if (c == 43) {  // '+'
+                advance();
+                current_token := 2;  // PLUS
+            } else {
+                advance();
+                current_token := 99;  // UNKNOWN
+            }
+        }
+    }
+}
+
+// Parse primary expression
+int parse_primary(char* input) {
+    if (current_token == 1) {  // INT
+        int val = token_value;
+        lex(input);
+        val
+    } else {
+        0  // Error
+    }
+}
+
+// Parse expression (just addition for now)
+int parse_expr(char* input) {
+    int left = parse_primary(input);
+
+    if (current_token == 2) {  // PLUS
+        lex(input);
+        int right = parse_primary(input);
+        left + right
+    } else {
+        left
+    }
+}
+
+// Simple compiler that evaluates expressions
+int compile(char* source) {
+    lexer_init(source);
+    lex(source);
+
+    int result = parse_expr(source);
+    print_int(result);
+    result
+}

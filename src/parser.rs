@@ -583,7 +583,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary_expr(&mut self) -> Expr {
-        println!("DEBUG parse_primary_expr: current_token = {:?}, position = {}", self.current_token, self.lexer.position());
         match &self.current_token {
             Token::LParen => {
                 self.advance();
