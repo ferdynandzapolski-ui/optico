@@ -115,11 +115,11 @@ impl<'a> Parser<'a> {
         };
         self.advance();
 
-        if self.current_token == Token::LParen {
+        if self.current_token == Token::LParen | Token::LBrace {
             // Function declaration
             self.advance();
             let mut params = Vec::new();
-            while self.current_token != Token::RParen {
+            while self.current_token != Token::RParen | Token::RBrace {
                 let p_ty = self.parse_type();
                 let p_name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
@@ -131,7 +131,7 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
             }
-            self.expect(Token::RParen);
+            self.expect(Token::RParen | Token::RBrace);
             let body = if self.current_token == Token::Semi {
                 Expr::Block(vec![])
             } else {
@@ -436,9 +436,9 @@ impl<'a> Parser<'a> {
         }
         if self.current_token == Token::If {
             self.advance();
-            self.expect(Token::LParen);
+            self.expect(Token::LParen | Token::LBrace);
             let cond = self.parse_expr();
-            self.expect(Token::RParen);
+            self.expect(Token::RParen | Token::RBrace);
             let then = self.parse_expr();
             let mut els = None;
             if self.current_token == Token::Else {
@@ -602,29 +602,29 @@ impl<'a> Parser<'a> {
                     self.advance();
                 }
                 self.expect(Token::Gt);
-                self.expect(Token::LParen);
+                self.expect(Token::LParen | Token::LBrace);
                 let mut args = Vec::new();
-                while self.current_token != Token::RParen {
+                while self.current_token != Token::RParen | Token::RBrace {
                     args.push(self.parse_expr());
                     if self.current_token == Token::Comma {
                         self.advance();
                     }
                 }
-                self.expect(Token::RParen);
+                self.expect(Token::RParen | Token::RBrace);
                 Expr::Alloc(_ty, args, dur)
             }
             Token::Free => {
                 self.advance();
-                self.expect(Token::LParen);
+                self.expect(Token::LParen | Token::LBrace);
                 let e = self.parse_expr();
-                self.expect(Token::RParen);
+                self.expect(Token::RParen | Token::RBrace);
                 Expr::Free(Box::new(e))
             }
             Token::Checked => {
                 self.advance();
-                self.expect(Token::LParen);
+                self.expect(Token::LParen | Token::LBrace);
                 let e = self.parse_expr();
-                self.expect(Token::RParen);
+                self.expect(Token::RParen | Token::RBrace);
                 Expr::Checked(Box::new(e))
             }
             Token::Star => {
@@ -694,7 +694,7 @@ impl<'a> Parser<'a> {
                         let mut next_lex = lex_copy.clone();
                         let after_next = next_lex.next_token();
                         match after_next {
-                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At | Token::PerfGrade | Token::LParen => true,
+                            Token::Assign | Token::Star | Token::Ident(_) | Token::Semi | Token::At | Token::PerfGrade | Token::LParen | Token::LBrace => true,
                             _ => false,
                         }
                     }
@@ -721,16 +721,16 @@ impl<'a> Parser<'a> {
                     if self.current_token == Token::Assign {
                         self.advance();
                         Expr::Assign(name, Box::new(self.parse_expr()))
-                    } else if self.current_token == Token::LParen {
+                    } else if self.current_token == Token::LParen | Token::LBrace {
                     self.advance();
                     let mut args = Vec::new();
-                    while self.current_token != Token::RParen {
+                    while self.current_token != Token::RParen | Token::RBrace {
                         args.push(self.parse_expr());
                         if self.current_token == Token::Comma {
                             self.advance();
                         }
                     }
-                        self.expect(Token::RParen);
+                        self.expect(Token::RParen | Token::RBrace);
                         Expr::Call(Box::new(Expr::Var(name)), args)
                     } else {
                         Expr::Var(name)

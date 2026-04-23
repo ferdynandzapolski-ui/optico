@@ -65,13 +65,12 @@ fn main() {
         // 1. Run opt with GOIR passes
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
-            .arg(format!("-passes={}", goir_passes))
-            .arg(format!("-go-tier={}", match tier { "diag" => "0", "hybrid" => "1", "cap" => "2", _ => "0" }))
-            .arg("-S")
-            .arg(&llvm_path)
-            .arg("-o")
-            .arg(&output_ll)
-            .status();
+             .arg(format!("-passes={}", goir_passes))
+             .arg("-S")
+             .arg(&llvm_path)
+             .arg("-o")
+             .arg(&output_ll)
+             .status();
 
         if let Ok(s) = opt_status {
             if s.success() {
