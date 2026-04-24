@@ -284,12 +284,6 @@ impl Sema {
                 self.check_expr(value, env, res_consumed, local_resources);
                 Type::Void
             }
-            Expr::IndexAssign(base, index, value) => {
-                self.check_expr(base, env, res_consumed, local_resources);
-                self.check_expr(index, env, res_consumed, local_resources);
-                self.check_expr(value, env, res_consumed, local_resources);
-                Type::Void
-            }
             Expr::Var(n) => {
                 if n == "is_null" { return Type::Int; }
                 if let Some(dur) = self.resource_durability.get(n).cloned() {

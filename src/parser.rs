@@ -476,32 +476,7 @@ impl<'a> Parser<'a> {
             return Expr::While(Box::new(cond), Box::new(body));
         }
 
-        self.parse_assignment_expr()
-    }
-
-    fn parse_assignment_expr(&mut self) -> Expr {
-        let lhs = self.parse_put_expr();
-        
-        if self.current_token == Token::Assign {
-            self.advance();
-            let rhs = self.parse_expr();
-            
-            match lhs {
-                Expr::Var(name) => Expr::Assign(name, Box::new(rhs)),
-                Expr::Access(base, field) => {
-                    // Reconstruct the Access expression for FieldAssign
-                    let access_expr = Expr::Access(base, field);
-                    Expr::FieldAssign(Box::new(access_expr), Box::new(rhs))
-                }
-                Expr::Index(base, index) => {
-                    // Create IndexAssign for array index assignment
-                    Expr::IndexAssign(base, index, Box::new(rhs))
-                }
-                _ => panic!("Invalid assignment target: {:?}", lhs),
-            }
-        } else {
-            lhs
-        }
+        self.parse_put_expr()
     }
 
     fn parse_put_expr(&mut self) -> Expr {
@@ -568,7 +543,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_multiplicative_expr(&mut self) -> Expr {
-        let mut e = self.parse_unary_expr();
+        let mut e = self.parse_postfix_expr();
         loop {
             let kind = match &self.current_token {
                 Token::Star => BinOpKind::Mul,
@@ -576,21 +551,9 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.advance();
-            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_unary_expr()));
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_postfix_expr()));
         }
         e
-    }
-
-    fn parse_unary_expr(&mut self) -> Expr {
-        if self.current_token == Token::Minus {
-            self.advance();
-            let e = self.parse_postfix_expr();
-            // Create a unary negation expression
-            // Since there's no UnaryNeg in the AST, we can use BinOp(Sub, 0, e)
-            Expr::BinOp(BinOpKind::Sub, Box::new(Expr::ConstInt(0)), Box::new(e))
-        } else {
-            self.parse_postfix_expr()
-        }
     }
 
     fn parse_postfix_expr(&mut self) -> Expr {
