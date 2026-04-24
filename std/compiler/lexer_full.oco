@@ -1,0 +1,342 @@
+// std/compiler/lexer_full.oco - Full self-hosted lexer that handles ALL tokens
+// This is the actual self-hosted implementation that needs LLVM toolchain
+
+extern "C" {
+    void* malloc(int size);
+    void free(void* ptr);
+    int strlen(char* s);
+    int strcmp(char* s1, char* s2);
+}
+
+struct String {
+    int len;
+    char* data;
+}
+
+// Copy from std/string.oco
+String string_slice(String s, int start, int len) {
+    if (start < 0) { start := 0; };
+    if (start + len > s.len) { len := s.len - start; };
+    char* buf = malloc(len);
+    int i = 0;
+    while (i < len) {
+        buf[i] := s.data[start + i];
+        i := i + 1
+    };
+    return String(len, buf)
+}
+
+String string_equal(String a, String b) {
+    if (a.len != b.len) {
+        return String(0, "")
+    };
+    int i = 0;
+    while (i < a.len) {
+        if (a.data[i] != b.data[i]) {
+            return String(0, "")
+        };
+        i := i + 1
+    };
+    return String(1, " ")
+}
+
+String string_concat(String a, String b) {
+    int total = a.len + b.len;
+    char* buf = malloc(total);
+    int i = 0;
+    while (i < a.len) {
+        buf[i] := a.data[i];
+        i := i + 1
+    };
+    int j = 0;
+    while (j < b.len) {
+        buf[i + j] := b.data[j];
+        j := j + 1
+    };
+    return String(total, buf)
+}
+
+struct Token {
+    int tag;
+    String lexeme;
+    int line;
+}
+
+struct Lexer {
+    String input;
+    int pos;
+    int line;
+}
+
+Token nil_token() {
+    return Token(0, String(0, ""), 0)
+}
+
+int is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+int is_alpha(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+int is_alnum(char c) {
+    return is_alpha(c) || is_digit(c);
+}
+
+Token lexer_lex_number(Lexer l, int start_pos) {
+    int has_dot = 0;
+    int i = l.pos;
+    while (i < l.input.len) {
+        char c = l.input.data[i];
+        if (c == '.') {
+            if (has_dot) { break; }
+            has_dot = 1;
+        } else if (!is_digit(c)) {
+            break
+        };
+        i := i + 1
+    };
+    l.pos := i;
+    String lexeme = string_slice(l.input, start_pos, i - start_pos);
+    if (has_dot) {
+        return Token(22, lexeme, l.line)  // FloatLit
+    } else {
+        return Token(20, lexeme, l.line)  // IntLit
+    }
+}
+
+Token lexer_lex_ident(Lexer l, int start_pos) {
+    int i = l.pos;
+    while (i < l.input.len) {
+        char c = l.input.data[i];
+        if (!is_alnum(c)) { break };
+        i := i + 1
+    };
+    l.pos := i;
+    String lexeme = string_slice(l.input, start_pos, i - start_pos);
+    
+    // Check keywords
+    if (string_equal(lexeme, string_slice("int", 0, 3))) {
+        return Token(30, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("float", 0, 5))) {
+        return Token(31, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("bool", 0, 4))) {
+        return Token(32, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("char", 0, 4))) {
+        return Token(33, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("void", 0, 4))) {
+        return Token(34, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("struct", 0, 6))) {
+        return Token(35, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("resource", 0, 8))) {
+        return Token(36, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("protocol", 0, 8))) {
+        return Token(37, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("extern", 0, 6))) {
+        return Token(39, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("if", 0, 2))) {
+        return Token(55, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("else", 0, 4))) {
+        return Token(56, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("return", 0, 6))) {
+        return Token(58, lexeme, l.line)
+    };
+    if (string_equal(lexeme, string_slice("while", 0, 5))) {
+        return Token(57, lexeme, l.line)
+    };
+    return Token(21, lexeme, l.line)  // Ident
+}
+
+Token lexer_next_token(Lexer l) {
+    // Skip whitespace and comments
+    while (l.pos < l.input.len) {
+        char c = l.input.data[l.pos];
+        if (c == ' ' || c == '\n' || c == '\t' || c == '\r') {
+            if (c == '\n') { l.line := l.line + 1; };
+            l.pos := l.pos + 1;
+        } else if (c == '/' && l.pos + 1 < l.input.len && l.input.data[l.pos + 1] == '/') {
+            while (l.pos < l.input.len && l.input.data[l.pos] != '\n') {
+                l.pos := l.pos + 1
+            };
+        } else {
+            break
+        }
+    };
+    
+    if (l.pos >= l.input.len) {
+        return nil_token()  // EOF
+    };
+    
+    int start_pos = l.pos;
+    char c = l.input.data[l.pos];
+    l.pos := l.pos + 1;
+    
+    // Single character tokens
+    if (c == '{') { return Token(1, String(1, "{"), l.line); }
+    if (c == '}') { return Token(2, String(1, "}"), l.line); }
+    if (c == '(') { return Token(3, String(1, "("), l.line); }
+    if (c == ')') { return Token(4, String(1, ")"), l.line); }
+    if (c == '[') { return Token(5, String(1, "["), l.line); }
+    if (c == ']') { return Token(6, String(1, "]"), l.line); }
+    if (c == '.') { return Token(7, String(1, "."), l.line); }
+    if (c == ',') { return Token(8, String(1, ","), l.line); }
+    if (c == ';') { return Token(9, String(1, ";"), l.line); }
+    if (c == ':') { return Token(60, String(1, ":"), l.line); }
+    if (c == '*') { return Token(10, String(1, "*"), l.line); }
+    if (c == '+') { return Token(11, String(1, "+"), l.line); }
+    if (c == '|') { return Token(49, String(1, "|"), l.line); }
+    if (c == '!') { return Token(43, String(1, "!"), l.line); }
+    if (c == '@') { return Token(64, String(1, "@"), l.line); }
+    if (c == '&') { return Token(66, String(1, "&"), l.line); }
+    if (c == '%') { return Token(60, String(1, "%"), l.line); }
+    
+    // Multi-character tokens
+    if (c == '-') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '>') {
+            l.pos := l.pos + 1;
+            return Token(12, String(2, "->"), l.line)
+        };
+        return Token(13, String(1, "-"), l.line)
+    };
+    
+    if (c == ':') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '=') {
+            l.pos := l.pos + 1;
+            return Token(50, String(2, ":="), l.line)
+        };
+        return Token(60, String(1, ":"), l.line)
+    };
+    
+    if (c == '=') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '=') {
+            l.pos := l.pos + 1;
+            return Token(51, String(2, "=="), l.line)
+        };
+        return Token(14, String(1, "="), l.line)
+    };
+    
+    if (c == '!') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '=') {
+            l.pos := l.pos + 1;
+            return Token(52, String(2, "!="), l.line)
+        };
+        return Token(43, String(1, "!"), l.line)
+    };
+    
+    if (c == '<') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '=') {
+            l.pos := l.pos + 1;
+            return Token(55, String(2, "<="), l.line)
+        };
+        return Token(53, String(1, "<"), l.line)
+    };
+    
+    if (c == '>') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '=') {
+            l.pos := l.pos + 1;
+            return Token(56, String(2, ">="), l.line)
+        };
+        return Token(54, String(1, ">"), l.line)
+    };
+    
+    if (c == '&') {
+        if (l.pos < l.input.len && l.input.data[l.pos] == '&') {
+            l.pos := l.pos + 1;
+            return Token(57, String(2, "&&"), l.line)
+        };
+        return Token(66, String(1, "&"), l.line)
+    };
+    
+    if (is_digit(c)) {
+        return lexer_lex_number(l, start_pos)
+    };
+    
+    if (is_alpha(c)) {
+        return lexer_lex_ident(l, start_pos)
+    };
+    
+    if (c == '"') {
+        int i = l.pos;
+        while (i < l.input.len && l.input.data[i] != '"') {
+            if (l.input.data[i] == '\\') {
+                i := i + 2
+            } else {
+                i := i + 1
+            }
+        };
+        if (i < l.input.len) {
+            i := i + 1
+        };
+        l.pos := i;
+        String content = string_slice(l.input, start_pos + 1, i - start_pos - 2);
+        return Token(23, content, l.line)  // StringLit
+    };
+    
+    if (c == '\'') {
+        int i = l.pos;
+        if (i < l.input.len && l.input.data[i] == '\\') {
+            i := i + 2
+        } else {
+            i := i + 1
+        };
+        if (i < l.input.len && l.input.data[i] == '\'') {
+            i := i + 1
+        };
+        l.pos := i;
+        String content = string_slice(l.input, start_pos + 1, i - start_pos - 2);
+        return Token(61, content, l.line)  // CharLit
+    };
+    
+    return nil_token()
+}
+
+Lexer lexer_new(String input) {
+    return Lexer(input, 0, 1)
+}
+
+// Test function
+int test_lexer_basic() {
+    String input = string_slice("int x = 5;", 0, 11);
+    Lexer l = lexer_new(input);
+    
+    Token t1 = lexer_next_token(l);
+    if (t1.tag != 30) { return 1; }
+    
+    Token t2 = lexer_next_token(l);
+    if (t2.tag != 21) { return 2; }
+    
+    Token t3 = lexer_next_token(l);
+    if (t3.tag != 14) { return 3; }
+    
+    Token t4 = lexer_next_token(l);
+    if (t4.tag != 20) { return 4; }
+    
+    Token t5 = lexer_next_token(l);
+    if (t5.tag != 9) { return 5; }
+    
+    Token t6 = lexer_next_token(l);
+    if (t6.tag != 0) { return 6; }
+    
+    return 0;
+}
+
+int main() {
+    int result = test_lexer_basic();
+    if (result == 0) {
+        return 0;
+    } else {
+        return 1;
+    }
+}

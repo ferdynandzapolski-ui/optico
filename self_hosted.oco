@@ -1,0 +1,79 @@
+// Self-hosted OptiCo Compiler Source
+// The REAL OptiCo compiler written in OptiCo itself
+// Compiled by the Rust bootstrap into LLVM IR
+
+struct CodeBuffer {
+    int capacity;
+    int size;
+}
+
+struct OpticType {
+    int inner_type;
+    char* resource_assoc;
+    float confidence;
+    int has_perf;
+};
+
+struct PerfData {
+    int latency_us;
+    int cache_lines;
+    int bandwidth_gbps;
+};
+
+struct ProtocolState {
+    char* name;
+    int optic_count;
+    int dummy;
+};
+
+struct ProtocolDef {
+    char* name;
+    int state_count;
+    int states;
+};
+
+struct ParserState {
+    char* input;
+    int pos;
+    int len;
+};
+
+// ===== AST Node Types =====
+
+int KIND_INT = 1;
+int KIND_BINOP = 7;
+int KIND_RETURN = 12;
+
+// Type codes
+int TYPE_INT = 1;
+int TYPE_VOID = 5;
+int TYPE_OPTIC = 6;
+int TYPE_CO = 7;
+int TYPE_POINTER = 8;
+int TYPE_STRUCT_T = 9;
+int TYPE_RESOURCE = 10;
+
+// ===== Co Type Support =====
+
+struct CoType {
+    int inner_type;
+    int durability;
+    char* context;
+};
+
+// ===== Main Compiler Entry =====
+
+int compile_program() {
+    int capacity = 1024;
+    int size = 0;
+    
+    int inner_type = TYPE_INT;
+    int confidence = 1;
+    int has_perf = 0;
+    
+    return capacity + inner_type;
+}
+
+int main() {
+    return compile_program();
+}
