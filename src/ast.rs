@@ -62,6 +62,7 @@ pub enum Expr {
     LocalDecl(String, Type, Box<Expr>), // τ x = e
     Assign(String, Box<Expr>), // x = e
     FieldAssign(Box<Expr>, Box<Expr>), // x.field = e
+    IndexAssign(Box<Expr>, Box<Expr>, Box<Expr>), // x[e] = value (base, index, value)
     Return(Box<Expr>),
 }
 
