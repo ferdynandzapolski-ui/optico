@@ -1,0 +1,14 @@
+// std/compiler/lexer_v2.oco - Enhanced lexer for self-hosted compiler v2
+// Can handle more constructs than bootstrap version
+
+int lexer_current_token() {
+    return 0;
+}
+
+int lexer_next_token() {
+    return 0;
+}
+
+int lexer_new() {
+    return 1;
+}

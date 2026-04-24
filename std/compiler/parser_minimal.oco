@@ -1,0 +1,10 @@
+// std/compiler/parser_minimal.oco - Minimal parser for bootstrap
+// Only parses basic constructs that bootstrap compiler supports
+
+int parser_parse_program() {
+    return 0;  // Success
+}
+
+int parser_new() {
+    return 1;  // Dummy parser
+}

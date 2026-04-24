@@ -792,7 +792,12 @@ impl<'a> Parser<'a> {
                     if self.current_token == Token::Assign {
                         self.advance();
                         Expr::Assign(name, Box::new(self.parse_expr()))
-                    } else if matches!(&self.current_token, Token::LParen | Token::LBrace | Token::Lt) {
+                    } else if self.current_token == Token::LParen || self.current_token == Token::LBrace || (self.current_token == Token::Lt && {
+                        let mut temp_lex = self.lexer.clone();
+                        matches!(temp_lex.next_token(), Token::Ident(_)) &&
+                        matches!(temp_lex.next_token(), Token::Gt) &&
+                        matches!(temp_lex.next_token(), Token::LParen | Token::LBrace)
+                    }) {
                         // Handle function calls: name(args) or generic calls: name<Type>(args)
                         let mut type_param = None;
                         if self.current_token == Token::Lt {

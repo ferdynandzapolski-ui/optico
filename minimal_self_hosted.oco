@@ -1,0 +1,665 @@
+// minimal_self_hosted.oco - Minimal self-hosted OptiCo compiler
+// Stays within subset that Rust bootstrap can compile
+// Can compile OptiCo source code to LLVM IR
+
+extern "C" {
+    void* malloc(int size);
+    void free(void* ptr);
+    int printf(char* fmt, ...);
+    int puts(char* s);
+    void* fopen(char* path, char* mode);
+    int fclose(void* f);
+    int fseek(void* f, int offset, int whence);
+    int ftell(void* f);
+    int fread(void* ptr, int size, int n, void* f);
+}
+
+// ===== Constants =====
+int EOF = -1;
+int SEEK_END = 2;
+int SEEK_SET = 0;
+
+// ===== Token types =====
+int TOK_EOF = 0;
+int TOK_INT = 1;
+int TOK_IDENT = 2;
+int TOK_NUMBER = 3;
+int TOK_LPAREN = 4;
+int TOK_RPAREN = 5;
+int TOK_LBRACE = 6;
+int TOK_RBRACE = 7;
+int TOK_SEMI = 8;
+int TOK_PLUS = 9;
+int TOK_MINUS = 10;
+int TOK_STAR = 11;
+int TOK_SLASH = 12;
+int TOK_ASSIGN = 13;
+int TOK_RETURN = 14;
+int TOK_IF = 15;
+int TOK_ELSE = 16;
+int TOK_WHILE = 17;
+int TOK_LT = 18;
+int TOK_GT = 19;
+int TOK_EQ = 20;
+int TOK_NE = 21;
+
+// ===== Structs =====
+struct Token {
+    int tag;
+    int ival;
+    char* sval;
+};
+
+struct Lexer {
+    char* input;
+    int pos;
+    int len;
+    int line;
+};
+
+struct Node {
+    int tag;
+    int ival;
+    char* sval;
+    int left;
+    int right;
+};
+
+// ===== Global arrays for nodes =====
+struct Node nodes[1000];
+int node_count = 0;
+
+int new_node(int tag, int ival, char* sval, int left, int right) {
+    int idx = node_count++;
+    nodes[idx].tag = tag;
+    nodes[idx].ival = ival;
+    nodes[idx].sval = sval;
+    nodes[idx].left = left;
+    nodes[idx].right = right;
+    return idx;
+}
+
+// ===== Utility =====
+int is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+int is_alpha(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+int str_eq(char* a, char* b) {
+    int i = 0;
+    while (a[i] != 0 && b[i] != 0) {
+        if (a[i] != b[i]) { return 0; }
+        i = i + 1;
+    }
+    return a[i] == 0 && b[i] == 0;
+}
+
+int str_len(char* s) {
+    int i = 0;
+    while (s[i] != 0) { i = i + 1; }
+    return i;
+}
+
+// ===== File I/O =====
+char* read_file(char* path) {
+    void* f = fopen(path, "rb");
+    if (f == 0) { return 0; }
+    fseek(f, 0, SEEK_END);
+    int len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* buf = malloc(len + 1);
+    fread(buf, 1, len, f);
+    buf[len] = 0;
+    fclose(f);
+    return buf;
+}
+
+// ===== Lexer =====
+int skip_whitespace(Lexer* l) {
+    while (l->pos < l->len) {
+        char c = l->input[l->pos];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            if (c == '\n') { l->line = l->line + 1; }
+            l->pos = l->pos + 1;
+        } else if (c == '/' && l->pos + 1 < l->len && l->input[l->pos + 1] == '/') {
+            while (l->pos < l->len && l->input[l->pos] != '\n') {
+                l->pos = l->pos + 1;
+            }
+        } else {
+            break;
+        }
+    }
+    return 0;
+}
+
+Token lexer_number(Lexer* l, int start) {
+    while (l->pos < l->len && is_digit(l->input[l->pos])) {
+        l->pos = l->pos + 1;
+    }
+    int len = l->pos - start;
+    char* lexeme = malloc(len + 1);
+    int i = 0;
+    while (i < len) {
+        lexeme[i] = l->input[start + i];
+        i = i + 1;
+    }
+    lexeme[len] = 0;
+    
+    // Convert to int
+    int val = 0;
+    i = 0;
+    while (i < len) {
+        val = val * 10 + (lexeme[i] - '0');
+        i = i + 1;
+    }
+    
+    Token t;
+    t.tag = TOK_NUMBER;
+    t.ival = val;
+    t.sval = lexeme;
+    return t;
+}
+
+Token lexer_ident(Lexer* l, int start) {
+    while (l->pos < l->len && is_alpha(l->input[l->pos])) {
+        l->pos = l->pos + 1;
+    }
+    int len = l->pos - start;
+    char* lexeme = malloc(len + 1);
+    int i = 0;
+    while (i < len) {
+        lexeme[i] = l->input[start + i];
+        i = i + 1;
+    }
+    lexeme[len] = 0;
+    
+    Token t;
+    t.ival = 0;
+    t.sval = lexeme;
+    
+    if (str_eq(lexeme, "int")) { t.tag = TOK_INT; }
+    else if (str_eq(lexeme, "return")) { t.tag = TOK_RETURN; }
+    else if (str_eq(lexeme, "if")) { t.tag = TOK_IF; }
+    else if (str_eq(lexeme, "else")) { t.tag = TOK_ELSE; }
+    else if (str_eq(lexeme, "while")) { t.tag = TOK_WHILE; }
+    else { t.tag = TOK_IDENT; }
+    
+    return t;
+}
+
+Token lexer_next(Lexer* l) {
+    skip_whitespace(l);
+    if (l->pos >= l->len) {
+        Token t;
+        t.tag = TOK_EOF;
+        t.ival = 0;
+        t.sval = 0;
+        return t;
+    }
+    
+    char c = l->input[l->pos];
+    int start = l->pos;
+    l->pos = l->pos + 1;
+    
+    if (c == '(') { Token t; t.tag = TOK_LPAREN; t.ival = 0; t.sval = 0; return t; }
+    if (c == ')') { Token t; t.tag = TOK_RPAREN; t.ival = 0; t.sval = 0; return t; }
+    if (c == '{') { Token t; t.tag = TOK_LBRACE; t.ival = 0; t.sval = 0; return t; }
+    if (c == '}') { Token t; t.tag = TOK_RBRACE; t.ival = 0; t.sval = 0; return t; }
+    if (c == ';') { Token t; t.tag = TOK_SEMI; t.ival = 0; t.sval = 0; return t; }
+    if (c == '+') { Token t; t.tag = TOK_PLUS; t.ival = 0; t.sval = 0; return t; }
+    if (c == '-') { Token t; t.tag = TOK_MINUS; t.ival = 0; t.sval = 0; return t; }
+    if (c == '*') { Token t; t.tag = TOK_STAR; t.ival = 0; t.sval = 0; return t; }
+    if (c == '/') { Token t; t.tag = TOK_SLASH; t.ival = 0; t.sval = 0; return t; }
+    if (c == '=') { 
+        if (l->pos < l->len && l->input[l->pos] == '=') {
+            l->pos = l->pos + 1;
+            Token t; t.tag = TOK_EQ; t.ival = 0; t.sval = 0; return t;
+        }
+        Token t; t.tag = TOK_ASSIGN; t.ival = 0; t.sval = 0; return t; 
+    }
+    if (c == '<') { 
+        if (l->pos < l->len && l->input[l->pos] == '=') {
+            l->pos = l->pos + 1;
+            Token t; t.tag = 21; t.ival = 0; t.sval = 0; return t; // <=
+        }
+        Token t; t.tag = TOK_LT; t.ival = 0; t.sval = 0; return t; 
+    }
+    if (c == '>') { 
+        if (l->pos < l->len && l->input[l->pos] == '=') {
+            l->pos = l->pos + 1;
+            Token t; t.tag = 22; t.ival = 0; t.sval = 0; return t; // >=
+        }
+        Token t; t.tag = TOK_GT; t.ival = 0; t.sval = 0; return t; 
+    }
+    if (c == '!') { 
+        if (l->pos < l->len && l->input[l->pos] == '=') {
+            l->pos = l->pos + 1;
+            Token t; t.tag = TOK_NE; t.ival = 0; t.sval = 0; return t;
+        }
+        Token t; t.tag = TOK_IDENT; t.ival = 0; t.sval = "!"; return t; 
+    }
+    
+    if (is_digit(c)) { return lexer_number(l, start); }
+    if (is_alpha(c)) { return lexer_ident(l, start); }
+    
+    Token t; t.tag = TOK_EOF; t.ival = 0; t.sval = 0; return t;
+}
+
+// ===== Parser =====
+Token cur_tok;
+Lexer* cur_lex;
+
+void adv() {
+    cur_tok = lexer_next(cur_lex);
+}
+
+int expect(int tag) {
+    if (cur_tok.tag != tag) {
+        printf("Parse error: expected %d, got %d\n", tag, cur_tok.tag);
+        return 0;
+    }
+    adv();
+    return 1;
+}
+
+int parse_expr();
+
+int parse_primary() {
+    if (cur_tok.tag == TOK_NUMBER) {
+        int val = cur_tok.ival;
+        adv();
+        return new_node(1, val, 0, 0, 0); // NODE_INT
+    } else if (cur_tok.tag == TOK_IDENT) {
+        char* name = cur_tok.sval;
+        adv();
+        return new_node(2, 0, name, 0, 0); // NODE_IDENT
+    } else if (cur_tok.tag == TOK_LPAREN) {
+        adv();
+        int expr = parse_expr();
+        expect(TOK_RPAREN);
+        return expr;
+    } else {
+        printf("Unexpected token: %d\n", cur_tok.tag);
+        adv();
+        return 0;
+    }
+}
+
+int parse_mult() {
+    int left = parse_primary();
+    while (cur_tok.tag == TOK_STAR || cur_tok.tag == TOK_SLASH) {
+        int op = cur_tok.tag;
+        adv();
+        int right = parse_primary();
+        left = new_node(3, op, 0, left, right); // NODE_BINOP
+    }
+    return left;
+}
+
+int parse_add() {
+    int left = parse_mult();
+    while (cur_tok.tag == TOK_PLUS || cur_tok.tag == TOK_MINUS) {
+        int op = cur_tok.tag;
+        adv();
+        int right = parse_mult();
+        left = new_node(3, op, 0, left, right);
+    }
+    return left;
+}
+
+int parse_cmp() {
+    int left = parse_add();
+    if (cur_tok.tag == TOK_LT || cur_tok.tag == TOK_GT || cur_tok.tag == TOK_EQ || cur_tok.tag == TOK_NE) {
+        int op = cur_tok.tag;
+        adv();
+        int right = parse_add();
+        left = new_node(3, op, 0, left, right);
+    }
+    return left;
+}
+
+int parse_expr() {
+    return parse_cmp();
+}
+
+int parse_stmt();
+
+int parse_block() {
+    if (!expect(TOK_LBRACE)) { return 0; }
+    int first = 0;
+    int last = 0;
+    while (cur_tok.tag != TOK_RBRACE && cur_tok.tag != TOK_EOF) {
+        int stmt = parse_stmt();
+        if (stmt != 0) {
+            if (first == 0) { first = stmt; }
+            else { nodes[last].right = stmt; }
+            last = stmt;
+        }
+    }
+    if (!expect(TOK_RBRACE)) { return 0; }
+    return new_node(6, 0, 0, first, 0); // NODE_BLOCK
+}
+
+int parse_if() {
+    adv(); // consume 'if'
+    if (!expect(TOK_LPAREN)) { return 0; }
+    int cond = parse_expr();
+    if (!expect(TOK_RPAREN)) { return 0; }
+    int then_block = parse_block();
+    int else_block = 0;
+    if (cur_tok.tag == TOK_ELSE) {
+        adv();
+        else_block = parse_block();
+    }
+    return new_node(7, 0, 0, cond, new_node(8, 0, 0, then_block, else_block)); // NODE_IF with else in special node
+}
+
+int parse_while() {
+    adv(); // consume 'while'
+    if (!expect(TOK_LPAREN)) { return 0; }
+    int cond = parse_expr();
+    if (!expect(TOK_RPAREN)) { return 0; }
+    int body = parse_block();
+    return new_node(9, 0, 0, cond, body); // NODE_WHILE
+}
+
+int parse_stmt() {
+    if (cur_tok.tag == TOK_INT) {
+        adv();
+        if (cur_tok.tag != TOK_IDENT) { return 0; }
+        char* name = cur_tok.sval;
+        adv();
+        if (cur_tok.tag == TOK_ASSIGN) {
+            adv();
+            int init = parse_expr();
+            if (!expect(TOK_SEMI)) { return 0; }
+            return new_node(4, 0, name, init, 0); // NODE_VARDECL
+        }
+        return 0;
+    } else if (cur_tok.tag == TOK_RETURN) {
+        adv();
+        int expr = parse_expr();
+        if (!expect(TOK_SEMI)) { return 0; }
+        return new_node(5, 0, 0, expr, 0); // NODE_RETURN
+    } else if (cur_tok.tag == TOK_IF) {
+        return parse_if();
+    } else if (cur_tok.tag == TOK_WHILE) {
+        return parse_while();
+    } else if (cur_tok.tag == TOK_IDENT) {
+        char* name = cur_tok.sval;
+        adv();
+        if (cur_tok.tag == TOK_ASSIGN) {
+            adv();
+            int expr = parse_expr();
+            if (!expect(TOK_SEMI)) { return 0; }
+            return new_node(10, 0, name, expr, 0); // NODE_ASSIGN
+        }
+        // Expression statement
+        if (!expect(TOK_SEMI)) { return 0; }
+        return new_node(2, 0, name, 0, 0); // NODE_IDENT
+    } else {
+        adv();
+        return 0;
+    }
+}
+
+// ===== Code Generation =====
+int temp_cnt = 0;
+int label_cnt = 0;
+
+void out(char* s) {
+    printf("%s", s);
+}
+
+void out_int(int n) {
+    printf("%d", n);
+}
+
+void gen_expr(int n) {
+    if (n == 0) { return; }
+    int tag = nodes[n].tag;
+    if (tag == 1) { // INT
+        out("%t");
+        out_int(temp_cnt++);
+        out(" = add i32 0, ");
+        out_int(nodes[n].ival);
+        out("\n");
+    } else if (tag == 2) { // IDENT
+        out("%t");
+        out_int(temp_cnt++);
+        out(" = load i32, i32* %");
+        out(nodes[n].sval);
+        out("\n");
+    } else if (tag == 3) { // BINOP
+        int left = nodes[n].left;
+        int right = nodes[n].right;
+        gen_expr(left);
+        int left_temp = temp_cnt - 1;
+        gen_expr(right);
+        int right_temp = temp_cnt - 1;
+        out("%t");
+        out_int(temp_cnt++);
+        out(" = ");
+        int op = nodes[n].ival;
+        if (op == TOK_PLUS) { out("add"); }
+        else if (op == TOK_MINUS) { out("sub"); }
+        else if (op == TOK_STAR) { out("mul"); }
+        else if (op == TOK_SLASH) { out("sdiv"); }
+        else if (op == TOK_LT) { out("icmp slt"); }
+        else if (op == TOK_GT) { out("icmp sgt"); }
+        else if (op == TOK_EQ) { out("icmp eq"); }
+        else if (op == TOK_NE) { out("icmp ne"); }
+        else { out("add"); }
+        out(" i32 %t");
+        out_int(left_temp);
+        out(", %t");
+        out_int(right_temp);
+        out("\n");
+    }
+}
+
+void gen_stmt(int n) {
+    if (n == 0) { return; }
+    int tag = nodes[n].tag;
+    if (tag == 4) { // VARDECL
+        out("  %");
+        out(nodes[n].sval);
+        out(" = alloca i32\n");
+        if (nodes[n].left != 0) {
+            gen_expr(nodes[n].left);
+            int val_temp = temp_cnt - 1;
+            out("  store i32 %t");
+            out_int(val_temp);
+            out(", i32* %");
+            out(nodes[n].sval);
+            out("\n");
+        }
+    } else if (tag == 10) { // ASSIGN
+        gen_expr(nodes[n].left);
+        int val_temp = temp_cnt - 1;
+        out("  store i32 %t");
+        out_int(val_temp);
+        out(", i32* %");
+        out(nodes[n].sval);
+        out("\n");
+    } else if (tag == 5) { // RETURN
+        if (nodes[n].left != 0) {
+            gen_expr(nodes[n].left);
+            int val_temp = temp_cnt - 1;
+            out("  ret i32 %t");
+            out_int(val_temp);
+            out("\n");
+        } else {
+            out("  ret i32 0\n");
+        }
+    } else if (tag == 7) { // IF
+        gen_expr(nodes[n].left); // condition
+        int cond_temp = temp_cnt - 1;
+        out("  br i1 %t");
+        out_int(cond_temp);
+        out(", label %then");
+        out_int(label_cnt);
+        out(", label %else");
+        out_int(label_cnt + 1);
+        out("\n");
+        
+        int then_label = label_cnt++;
+        int else_label = label_cnt++;
+        int end_label = label_cnt++;
+        
+        out("then");
+        out_int(then_label);
+        out(":\n");
+        // then block is in nodes[n].right.left
+        if (nodes[n].right != 0) {
+            int block = nodes[n].right.left;
+            while (block != 0) {
+                gen_stmt(block);
+                block = nodes[block].right;
+            }
+        }
+        out("  br label %end");
+        out_int(end_label);
+        out("\n");
+        
+        out("else");
+        out_int(else_label);
+        out(":\n");
+        // else block is in nodes[n].right.right (if not 0)
+        if (nodes[n].right != 0 && nodes[n].right.right != 0) {
+            int block = nodes[n].right.right.left;
+            while (block != 0) {
+                gen_stmt(block);
+                block = nodes[block].right;
+            }
+        }
+        out("  br label %end");
+        out_int(end_label);
+        out("\n");
+        
+        out("end");
+        out_int(end_label);
+        out(":\n");
+    } else if (tag == 9) { // WHILE
+        int loop_label = label_cnt++;
+        int body_label = label_cnt++;
+        int end_label = label_cnt++;
+        
+        out("  br label %loop");
+        out_int(loop_label);
+        out("\n");
+        
+        out("loop");
+        out_int(loop_label);
+        out(":\n");
+        gen_expr(nodes[n].left);
+        int cond_temp = temp_cnt - 1;
+        out("  br i1 %t");
+        out_int(cond_temp);
+        out(", label %body");
+        out_int(body_label);
+        out(", label %end");
+        out_int(end_label);
+        out("\n");
+        
+        out("body");
+        out_int(body_label);
+        out(":\n");
+        if (nodes[n].right != 0) {
+            int block = nodes[n].right.left;
+            while (block != 0) {
+                gen_stmt(block);
+                block = nodes[block].right;
+            }
+        }
+        out("  br label %loop");
+        out_int(loop_label);
+        out("\n");
+        
+        out("end");
+        out_int(end_label);
+        out(":\n");
+    } else if (tag == 6) { // BLOCK
+        int stmt = nodes[n].left;
+        while (stmt != 0) {
+            gen_stmt(stmt);
+            stmt = nodes[stmt].right;
+        }
+    }
+}
+
+void gen_program() {
+    out("; ModuleID = 'opticoc'\n");
+    out("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:128-n8:16:32:64-S128\"\n");
+    out("target triple = \"x86_64-pc-linux-gnu\"\n\n");
+    
+    out("define i32 @main() {\n");
+    temp_cnt = 0;
+    label_cnt = 0;
+    
+    // Generate code for all statements (we only have main's body)
+    int i = 0;
+    while (i < node_count) {
+        if (nodes[i].tag == 6 || nodes[i].tag == 4 || nodes[i].tag == 5 || nodes[i].tag == 10) {
+            gen_stmt(i);
+        }
+        i = i + 1;
+    }
+    
+    out("  ret i32 0\n");
+    out("}\n");
+}
+
+// ===== Main =====
+int compile(char* path) {
+    char* source = read_file(path);
+    if (source == 0) {
+        printf("Cannot open %s\n", path);
+        return 1;
+    }
+    
+    // Init lexer
+    Lexer lex;
+    lex.input = source;
+    lex.pos = 0;
+    lex.len = 0;
+    while (source[lex.len] != 0) { lex.len = lex.len + 1; }
+    lex.line = 1;
+    
+    cur_lex = &lex;
+    node_count = 0;
+    temp_cnt = 0;
+    label_cnt = 0;
+    
+    adv(); // set first token
+    
+    // Parse: we only handle a single function `int main() { ... }`
+    if (cur_tok.tag != TOK_INT) { return 1; }
+    adv(); // consume 'int'
+    if (cur_tok.tag != TOK_IDENT) { return 1; }
+    adv(); // consume function name
+    if (cur_tok.tag != TOK_LPAREN) { return 1; }
+    adv(); // consume '('
+    if (cur_tok.tag != TOK_RPAREN) { return 1; }
+    adv(); // consume ')'
+    if (cur_tok.tag != TOK_LBRACE) { return 1; }
+    
+    // Parse a block as the function body
+    int body = parse_block(); // this consumes the {...}
+    
+    // Generate code
+    gen_program();
+    
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Usage: %s <source.oco>\n", argv[0]);
+        return 1;
+    }
+    return compile(argv[1]);
+}

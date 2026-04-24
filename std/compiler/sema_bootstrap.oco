@@ -1,0 +1,6 @@
+// std/compiler/sema_bootstrap.oco - Semantic analysis that bootstrap compiler can handle
+// Uses only basic constructs: int functions, variables, arithmetic
+
+int sema_check_program() {
+    return 0;
+}

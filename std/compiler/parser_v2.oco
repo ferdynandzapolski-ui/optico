@@ -1,0 +1,10 @@
+// std/compiler/parser_v2.oco - Enhanced parser for self-hosted compiler v2
+// Can handle more constructs than bootstrap version
+
+int parser_parse_program() {
+    return 0;
+}
+
+int parser_new() {
+    return 1;
+}

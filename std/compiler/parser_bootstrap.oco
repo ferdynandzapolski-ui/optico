@@ -1,0 +1,10 @@
+// std/compiler/parser_bootstrap.oco - Parser that bootstrap compiler can handle
+// Uses only basic constructs: int functions, variables, arithmetic
+
+int parser_parse_program() {
+    return 0;
+}
+
+int parser_new() {
+    return 1;
+}

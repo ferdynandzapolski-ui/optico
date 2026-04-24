@@ -190,6 +190,23 @@ impl CodeGenerator {
                     String::new()
                 }
             }
+            Expr::FieldAssign(base, value) => {
+                let (base_code, base_ptr) = self.gen_expr_value(base, indent);
+                let (value_code, value_val) = self.gen_expr_value(value, indent);
+                format!("{}{}  store i32 {}, i32* %{}\n", indent_str, value_code, value_val, base_ptr)
+            }
+            Expr::IndexAssign(base, index, value) => {
+                // For index assignment: base[index] = value
+                // Get the pointer to the base array
+                let (base_code, base_ptr) = self.gen_expr_value(base, indent);
+                let (index_code, index_val) = self.gen_expr_value(index, indent);
+                let (value_code, value_val) = self.gen_expr_value(value, indent);
+                
+                // Generate getelementptr to get pointer to array element
+                let elem_ptr = self.new_temp();
+                format!("{}{}{}{}  %{} = getelementptr i32, i32* {}, i32 {}\n  store i32 {}, i32* %{}\n",
+                    base_code, index_code, value_code, indent_str, elem_ptr, base_ptr, index_val, value_val, elem_ptr)
+            }
             Expr::If(cond, then_branch, else_branch) => {
                 let (cond_code, cond_val) = self.gen_expr_value(cond, indent);
                 let then_label = format!("then_{}", self.temp_count);

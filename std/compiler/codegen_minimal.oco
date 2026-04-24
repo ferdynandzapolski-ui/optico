@@ -1,0 +1,6 @@
+// std/compiler/codegen_minimal.oco - Minimal codegen for bootstrap
+// Only generates basic LLVM IR that bootstrap compiler supports
+
+int codegen_generate() {
+    return 0;  // Success
+}

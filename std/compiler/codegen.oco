@@ -7,6 +7,7 @@ struct CodegenContext {
     int label_counter;
     int temp_counter;
     String current_function;
+    String output;
 }
 
 // Initialize codegen context
@@ -16,249 +17,642 @@ CodegenContext codegen_new() {
         ptr_vector_new(8),   // global_decls
         0,                   // label_counter
         0,                   // temp_counter
-        string_slice("", 0, 0)  // current_function
+        string_slice("", 0, 0),  // current_function
+        string_slice("", 0, 0)   // output
     )
 }
 
-// Generate unique label
-String codegen_gen_label(CodegenContext ctx) {
-    {
-        ctx.label_counter := ctx.label_counter + 1;
-        string_concat(string_concat(string_concat(string_concat(
-            alloc<String>(5, alloc<char, Normal>(5)),
-            alloc<String>(6, alloc<char, Normal>(6))),
-            alloc<String>(6, alloc<char, Normal>(6))),
-            int_to_string(ctx.label_counter)),
-            alloc<String>(1, alloc<char, Normal>(1)))
-    }
-}
-
-// Convert int to string for labels
+// Convert int to string for labels/temps
 String int_to_string(int n) {
     if (n == 0) {
-        alloc<String>(1, alloc<char, Normal>(1))
+        string_slice("0", 0, 1)
     } else {
         {
             int digit = n - (n / 10) * 10;
-            string_push_char(int_to_string(n / 10), char_of_int(digit))
+            String rest = int_to_string(n / 10);
+            string_concat(rest, string_slice(
+                (if (digit == 0) { "0" } else {
+                if (digit == 1) { "1" } else {
+                if (digit == 2) { "2" } else {
+                if (digit == 3) { "3" } else {
+                if (digit == 4) { "4" } else {
+                if (digit == 5) { "5" } else {
+                if (digit == 6) { "6" } else {
+                if (digit == 7) { "7" } else {
+                if (digit == 8) { "8" } else { "9" }
+                }}}}}}}), 1))
         }
     }
 }
 
-char char_of_int(int n) {
-    if (n == 0) { '0' } else {
-    if (n == 1) { '1' } else {
-    if (n == 2) { '2' } else {
-    if (n == 3) { '3' } else {
-    if (n == 4) { '4' } else {
-    if (n == 5) { '5' } else {
-    if (n == 6) { '6' } else {
-    if (n == 7) { '7' } else {
-    if (n == 8) { '8' } else { '9' }}}}}}}}}
-}
-
-// Generate unique temporary name
+// Generate unique temp name like %t1
 String codegen_gen_temp(CodegenContext ctx) {
     {
         ctx.temp_counter := ctx.temp_counter + 1;
-        string_concat(string_concat(
-            alloc<String>(4, alloc<char, Normal>(4)),
-            int_to_string(ctx.temp_counter)),
-            alloc<String>(1, alloc<char, Normal>(1)))
+        string_concat(string_slice("%t", 0, 2), int_to_string(ctx.temp_counter))
+    }
+}
+
+// Generate unique label like label1
+String codegen_gen_label(CodegenContext ctx) {
+    {
+        ctx.label_counter := ctx.label_counter + 1;
+        string_concat(string_slice("label", 0, 5), int_to_string(ctx.label_counter))
     }
 }
 
 // Get LLVM type string for OptiCo type
 String codegen_type_to_llvm(String type_name) {
-    if (string_equal(type_name, alloc<String>(3, alloc<char, Normal>(3)))) {
-        alloc<String>(4, alloc<char, Normal>(4))  // i64
+    if (string_equal(type_name, string_slice("int", 0, 3))) {
+        string_slice("i32", 0, 3)
     } else {
-        if (string_equal(type_name, alloc<String>(4, alloc<char, Normal>(4)))) {
-            alloc<String>(5, alloc<char, Normal>(5))  // double
+        if (string_equal(type_name, string_slice("double", 0, 6))) {
+            string_slice("double", 0, 6)
         } else {
-            if (string_equal(type_name, alloc<String>(4, alloc<char, Normal>(4)))) {
-                alloc<String>(2, alloc<char, Normal>(2))  // i1
+            if (string_equal(type_name, string_slice("bool", 0, 4))) {
+                string_slice("i1", 0, 2)
             } else {
-                if (string_equal(type_name, alloc<String>(4, alloc<char, Normal>(4)))) {
-                    alloc<String>(2, alloc<char, Normal>(2))  // i8
+                if (string_equal(type_name, string_slice("char", 0, 4))) {
+                    string_slice("i8", 0, 2)
                 } else {
-                    alloc<String>(6, alloc<char, Normal>(6))  // void
+                    if (string_equal(type_name, string_slice("void", 0, 4))) {
+                        string_slice("void", 0, 4)
+                    } else {
+                        string_slice("i32", 0, 3)
+                    }
                 }
             }
         }
     }
 }
 
-// Generate function header
+// Append a string to the output
+void codegen_emit(CodegenContext ctx, String s) {
+    ctx.output := string_concat(ctx.output, s)
+}
+
+// Append a line to the output (with newline)
+void codegen_emitln(CodegenContext ctx, String s) {
+    ctx.output := string_concat(ctx.output, string_concat(s, string_slice("\n", 0, 1)))
+}
+
+// Generate module header
+void codegen_emit_module_header(CodegenContext ctx) {
+    codegen_emitln(ctx, string_slice("; ModuleID = 'opticoc'", 0, 26));
+    codegen_emitln(ctx, string_slice("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:128-n8:16:32:64-S128\"", 0, 89));
+    codegen_emitln(ctx, string_slice("target triple = \"x86_64-pc-linux-gnu\"", 0, 42));
+    codegen_emitln(ctx, string_slice("", 0, 0))
+}
+
+// Generate function header: define i32 @name(i32 %param1, ...) {
 String codegen_func_header(String name, String ret_type, PtrVector params) {
-    string_concat(string_concat(
-        string_concat(ret_type, alloc<String>(1, alloc<char, Normal>(1))),
-        name),
-        alloc<String>(2, alloc<char, Normal>(2)))
-}
-
-// Generate load instruction
-String codegen_load(String ty, String name) {
-    string_concat(string_concat(string_concat(
-        alloc<String>(5, alloc<char,Normal>(5)),
-        ty),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        name)
-}
-
-// Generate store instruction
-String codegen_store(String ty, String val, String ptr) {
-    string_concat(string_concat(string_concat(
-        string_concat(alloc<String>(6, alloc<char,Normal>(6)), ty),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        val),
-        string_concat(alloc<String>(2, alloc<char,Normal>(2)), ptr))
-}
-
-// Generate alloca
-String codegen_alloca(String ty, String name) {
-    string_concat(string_concat(
-        alloc<String>(6, alloc<char,Normal>(6)),
-        string_concat(ty, alloc<String>(1, alloc<char,Normal>(1)))),
-        name)
-}
-
-// Generate return
-String codegen_return(String ty, String val) {
-    string_concat(
-        alloc<String>(7, alloc<char,Normal>(7)),
-        string_concat(val, alloc<String>(1, alloc<char,Normal>(1))))
-}
-
-String codegen_return_void() {
-    alloc<String>(8, alloc<char,Normal>(8))
-}
-
-// Generate binary operation
-String codegen_binop(String op, String ty, String lhs, String rhs) {
-    string_concat(string_concat(string_concat(
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)), ty),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        string_concat(lhs,
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
-        rhs))),
-        alloc<String>(1, alloc<char,Normal>(1)))
-}
-
-// Generate comparison
-String codegen_icmp(String pred, String ty, String lhs, String rhs) {
-    string_concat(string_concat(string_concat(
-        string_concat(string_concat(
-            alloc<String>(6, alloc<char,Normal>(6)),
-            alloc<String>(2, alloc<char,Normal>(2))),
-            pred),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        string_concat(lhs,
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
-        rhs))),
-        alloc<String>(1, alloc<char,Normal>(1)))
-}
-
-// Generate phi
-String codegen_phi(String ty, String first_label, String first_val, String second_label, String second_val) {
-    string_concat(string_concat(string_concat(
-        string_concat(string_concat(
-            alloc<String>(4, alloc<char,Normal>(4)),
-            ty),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        string_concat(first_label,
-        string_concat(alloc<String>(2, alloc<char,Normal>(2)),
-        string_concat(first_val,
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
-        second_label))),
-        string_concat(alloc<String>(2, alloc<char,Normal>(2)), second_val))),
-        alloc<String>(1, alloc<char,Normal>(1)))
-}
-
-// Generate call
-String codegen_call(String ret_ty, String func, PtrVector args) {
     {
-        string_concat(
-            string_concat(string_concat(
-                ret_ty,
-                alloc<String>(5, alloc<char,Normal>(5))),
-                func),
-            alloc<String>(2, alloc<char,Normal>(2)))
+        String result = string_concat(string_slice("define ", 0, 7), ret_type);
+        result := string_concat(result, string_slice(" @", 0, 3));
+        result := string_concat(result, name);
+        result := string_concat(result, string_slice("(", 0, 1));
+        // Add params
+        int i = 0;
+        while (i < ptr_vector_len(params)) {
+            Node* param = ptr_vector_at(params, i);
+            if (i > 0) {
+                result := string_concat(result, string_slice(", ", 0, 2))
+            };
+            String pty = codegen_type_to_llvm(
+                (if (ptr_vector_len(param.children) > 0) {
+                    Node* ty_node = ptr_vector_at(param.children, 0);
+                    ty_node.lexeme
+                } else { string_slice("int", 0, 3) })
+            );
+            result := string_concat(result, pty);
+            result := string_concat(result, string_slice(" %", 0, 2));
+            result := string_concat(result, param.lexeme);
+            i := i + 1
+        };
+        result := string_concat(result, string_slice(") {\n", 0, 4));
+        result
     }
 }
 
-// Generate getelementptr for struct field access
-String codegen_gep(String struct_ty, String ptr, int field_idx) {
-    string_concat(string_concat(string_concat(
-        alloc<String>(15, alloc<char,Normal>(15)),
-        struct_ty),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        string_concat(ptr,
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
-        int_to_string(field_idx))))
+// Generate function footer
+String codegen_func_footer() {
+    string_slice("}\n", 0, 2)
 }
 
-// Generate alloc for heap allocation
-String codegen_malloc(String ty) {
-    string_concat(
-        alloc<String>(6, alloc<char,Normal>(6)),
+// Generate load instruction: %t = load i32, i32* %ptr
+String codegen_load(String ty, String ptr) {
+    string_concat(string_concat(string_concat(
+        string_slice("  %t = load ", 0, 13),
+        ty),
+        string_concat(string_slice(", ", 0, 2), ty)),
+        string_concat(string_slice("* ", 0, 2), ptr)
+}
+
+// Generate store instruction: store i32 %val, i32* %ptr
+String codegen_store(String ty, String val, String ptr) {
+    string_concat(string_concat(string_concat(
+        string_concat(string_slice("  store ", 0, 8), ty),
+        string_concat(string_slice(" ", 0, 1), val)),
+        string_concat(string_slice(", ", 0, 2), ty)),
+        string_concat(string_slice("* ", 0, 2), ptr)
+}
+
+// Generate alloca: %t = alloca i32
+String codegen_alloca(String ty, String name) {
+    string_concat(string_concat(
+        string_slice("  ", 0, 2),
+        string_concat(name, string_slice(" = alloca ", 0, 10))),
         ty)
 }
 
-// Generate free for heap deallocation  
+// Generate return: ret i32 %val
+String codegen_return(String ty, String val) {
+    string_concat(
+        string_concat(string_slice("  ret ", 0, 6), ty),
+        string_concat(string_slice(" ", 0, 1), val))
+}
+
+// Generate void return
+String codegen_return_void() {
+    string_slice("  ret void", 0, 11)
+}
+
+// Generate binary op: %t = add i32 %lhs, %rhs
+String codegen_binop(String op, String ty, String lhs, String rhs) {
+    string_concat(string_concat(string_concat(
+        string_concat(string_concat(
+            string_slice("  %t = ", 0, 7), op),
+            string_concat(string_slice(" ", 0, 1), ty)),
+        string_concat(string_slice(" ", 0, 1), lhs)),
+        string_concat(string_slice(", ", 0, 2), rhs)),
+        string_slice("", 0, 0))
+}
+
+// Generate comparison: %t = icmp eq i32 %lhs, %rhs
+String codegen_icmp(String pred, String ty, String lhs, String rhs) {
+    string_concat(string_concat(string_concat(
+        string_concat(string_concat(
+            string_slice("  %t = icmp ", 0, 13), pred),
+            string_concat(string_slice(" ", 0, 1), ty)),
+        string_concat(string_slice(" ", 0, 1), lhs)),
+        string_concat(string_slice(", ", 0, 2), rhs)),
+        string_slice("", 0, 0))
+}
+
+// Generate phi: %t = phi i32 [ %val1, %label1 ], [ %val2, %label2 ]
+String codegen_phi(String ty, String first_label, String first_val, String second_label, String second_val) {
+    string_concat(string_concat(string_concat(
+        string_concat(string_concat(
+            string_slice("  %t = phi ", 0, 12), ty),
+        string_concat(string_slice(" [ ", 0, 3), first_val)),
+        string_concat(string_concat(string_concat(
+            string_slice(", ", 0, 2), first_label),
+            string_slice(" ], [ ", 0, 5)), second_val)),
+        string_concat(string_concat(string_concat(
+            string_slice(", ", 0, 2), second_label),
+            string_slice(" ]", 0, 3)), string_slice("", 0, 0)))
+}
+
+// Generate call: %t = call i32 @func(i32 %arg1, ...)
+String codegen_call(String ret_ty, String func, PtrVector args) {
+    {
+        String result = string_concat(string_slice("  %t = call ", 0, 13), ret_ty);
+        result := string_concat(result, string_concat(string_slice(" @", 0, 2), func));
+        result := string_concat(result, string_slice("(", 0, 1));
+        int i = 0;
+        while (i < ptr_vector_len(args)) {
+            if (i > 0) {
+                result := string_concat(result, string_slice(", ", 0, 2))
+            };
+            // args are already codegen'd values
+            result := string_concat(result, ptr_vector_at(args, i));
+            i := i + 1
+        };
+        result := string_concat(result, string_slice(")", 0, 1));
+        result
+    }
+}
+
+// Generate getelementptr: %t = getelementptr %struct, %struct* %ptr, i32 0, i32 idx
+String codegen_gep(String struct_ty, String ptr, int field_idx) {
+    string_concat(string_concat(string_concat(
+        string_concat(string_concat(
+            string_slice("  %t = getelementptr ", 0, 22), struct_ty),
+        string_concat(string_slice(", ", 0, 2), struct_ty)),
+        string_concat(string_slice("* ", 0, 2), ptr)),
+        string_concat(string_concat(
+            string_slice(", i32 0, i32 ", 0, 13),
+            int_to_string(field_idx)), string_slice("", 0, 0)))
+}
+
+// Generate alloc for heap: %t = call i8* @malloc(i32 %size)
+String codegen_malloc(String ty) {
+    string_concat(string_slice("  %t = call i8* @malloc(", 0, 29), ty)
+}
+
+// Generate free: call void @free(i8* %ptr)
 String codegen_free(String ptr) {
-    string_concat(
-        alloc<String>(5, alloc<char,Normal>(5)),
-        ptr)
+    string_concat(string_slice("  call void @free(i8* ", 0, 27), ptr)
 }
 
-// Generate br instruction
+// Generate br: br label %label
 String codegen_br(String label) {
-    string_concat(
-        alloc<String>(3, alloc<char,Normal>(3)),
-        label)
+    string_concat(string_slice("  br label %", 0, 14), label)
 }
 
-// Generate cond br
+// Generate cond br: br i1 %cond, label %then, label %else
 String codegen_cond_br(String cond, String then_label, String else_label) {
     string_concat(string_concat(string_concat(
-        string_concat(alloc<String>(5, alloc<char,Normal>(5)),
-        cond),
-        alloc<String>(1, alloc<char,Normal>(1))),
-        string_concat(then_label,
-        string_concat(alloc<String>(1, alloc<char,Normal>(1)),
-        else_label))),
-        alloc<String>(1, alloc<char,Normal>(1)))
+        string_concat(string_concat(
+            string_slice("  br i1 ", 0, 9), cond),
+        string_concat(string_slice(", label %", 0, 9), then_label)),
+        string_concat(string_slice(", label %", 0, 9), else_label)),
+        string_slice("", 0, 0))
 }
 
-// Generate label
+// Generate label: label1:
 String codegen_label(String name) {
-    string_concat(name, alloc<String>(1, alloc<char,Normal>(1)))
+    string_concat(name, string_slice(":\n", 0, 2))
 }
 
-// Generate function footer
-String codegen_func_footer(String name) {
-    alloc<String>(2, alloc<char,Normal>(2))
+// Main codegen: generate LLVM IR string from AST node
+String codegen_expr(CodegenContext ctx, Node* node) {
+    {
+        if (node.tag == 10) {  // Integer literal
+            {
+                // Load integer constant - return the constant as a value
+                string_concat(string_slice("i32 ", 0, 4), node.lexeme)
+            }
+        } else {
+            if (node.tag == 11) {  // Identifier
+                {
+                    // Load variable - generate load instruction
+                    String temp = codegen_gen_temp(ctx);
+                    String load_instr = codegen_load(string_slice("i32", 0, 3),
+                        string_concat(string_slice("%", 0, 1), node.lexeme));
+                    codegen_emitln(ctx, string_concat(load_instr, string_slice("\n", 0, 1)));
+                    temp
+                }
+            } else {
+                if (node.tag == 13) {  // Addition
+                    {
+                        Node* lhs = ptr_vector_at(node.children, 0);
+                        Node* rhs = ptr_vector_at(node.children, 1);
+                        String lhs_val = codegen_expr(ctx, lhs);
+                        String rhs_val = codegen_expr(ctx, rhs);
+                        String temp = codegen_gen_temp(ctx);
+                        String add_instr = string_concat(string_concat(string_concat(
+                            string_concat(temp, string_slice(" = add i32 ", 0, 11)),
+                            lhs_val),
+                            string_concat(string_slice(", ", 0, 2), rhs_val)),
+                            string_slice("\n", 0, 1));
+                        codegen_emitln(ctx, add_instr);
+                        temp
+                    }
+                } else {
+                    if (node.tag == 19) {  // Subtraction
+                        {
+                            Node* lhs = ptr_vector_at(node.children, 0);
+                            Node* rhs = ptr_vector_at(node.children, 1);
+                            String lhs_val = codegen_expr(ctx, lhs);
+                            String rhs_val = codegen_expr(ctx, rhs);
+                            String temp = codegen_gen_temp(ctx);
+                            String sub_instr = string_concat(string_concat(string_concat(
+                                string_concat(temp, string_slice(" = sub i32 ", 0, 11)),
+                                lhs_val),
+                                string_concat(string_slice(", ", 0, 2), rhs_val)),
+                                string_slice("\n", 0, 1));
+                            codegen_emitln(ctx, sub_instr);
+                            temp
+                        }
+                    } else {
+                        if (node.tag == 17) {  // Multiplication
+                            {
+                                Node* lhs = ptr_vector_at(node.children, 0);
+                                Node* rhs = ptr_vector_at(node.children, 1);
+                                String lhs_val = codegen_expr(ctx, lhs);
+                                String rhs_val = codegen_expr(ctx, rhs);
+                                String temp = codegen_gen_temp(ctx);
+                                String mul_instr = string_concat(string_concat(string_concat(
+                                    string_concat(temp, string_slice(" = mul i32 ", 0, 11)),
+                                    lhs_val),
+                                    string_concat(string_slice(", ", 0, 2), rhs_val)),
+                                    string_slice("\n", 0, 1));
+                                codegen_emitln(ctx, mul_instr);
+                                temp
+                            }
+                        } else {
+                            if (node.tag == 18) {  // Division
+                                {
+                                    Node* lhs = ptr_vector_at(node.children, 0);
+                                    Node* rhs = ptr_vector_at(node.children, 1);
+                                    String lhs_val = codegen_expr(ctx, lhs);
+                                    String rhs_val = codegen_expr(ctx, rhs);
+                                    String temp = codegen_gen_temp(ctx);
+                                    String div_instr = string_concat(string_concat(string_concat(
+                                        string_concat(temp, string_slice(" = sdiv i32 ", 0, 13)),
+                                        lhs_val),
+                                        string_concat(string_slice(", ", 0, 2), rhs_val)),
+                                        string_slice("\n", 0, 1));
+                                    codegen_emitln(ctx, div_instr);
+                                    temp
+                                }
+                            } else {
+                                if (node.tag == 14) {  // Assignment
+                                    {
+                                        Node* lhs = ptr_vector_at(node.children, 0);
+                                        Node* rhs = ptr_vector_at(node.children, 1);
+                                        String rhs_val = codegen_expr(ctx, rhs);
+                                        String store_instr = string_concat(string_concat(string_concat(
+                                            string_slice("  store i32 ", 0, 12),
+                                            rhs_val),
+                                            string_concat(string_slice(", i32* %", 0, 8), lhs.lexeme)),
+                                            string_slice("\n", 0, 1));
+                                        codegen_emitln(ctx, store_instr);
+                                        rhs_val
+                                    }
+                                } else {
+                                    if (node.tag == 15) {  // Function call
+                                        {
+                                            Node* callee = ptr_vector_at(node.children, 0);
+                                            Node* args_node = ptr_vector_at(node.children, 1);
+                                            String func_name = callee.lexeme;
+                                            // Generate arg values
+                                            int i = 0;
+                                            PtrVector arg_vals = ptr_vector_new(ptr_vector_len(args_node.children));
+                                            while (i < ptr_vector_len(args_node.children)) {
+                                                Node* arg = ptr_vector_at(args_node.children, i);
+                                                String arg_val = codegen_expr(ctx, arg);
+                                                ptr_vector_push(arg_vals, arg_val);
+                                                i := i + 1
+                                            };
+                                            String temp = codegen_gen_temp(ctx);
+                                            String call_instr = string_concat(string_concat(
+                                                string_concat(temp, string_slice(" = call i32 @", 0, 14)),
+                                                func_name),
+                                                string_slice("(i32 ", 0, 5));
+                                            // Add args
+                                            i := 0;
+                                            while (i < ptr_vector_len(arg_vals)) {
+                                                if (i > 0) {
+                                                    call_instr := string_concat(call_instr, string_slice(", i32 ", 0, 6))
+                                                } else { 0 };
+                                                call_instr := string_concat(call_instr, ptr_vector_at(arg_vals, i));
+                                                i := i + 1
+                                            };
+                                            call_instr := string_concat(call_instr, string_slice(")\n", 0, 2));
+                                            codegen_emitln(ctx, call_instr);
+                                            temp
+                                        }
+                                    } else {
+                                        string_slice("", 0, 0)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
-// Write output to file
-void codegen_write_file(String path, String content) {
-    // File writing - using C runtime for simplicity
-    0
+// Generate code for a block (Node tag 20)
+void codegen_block(CodegenContext ctx, Node* block) {
+    {
+        int i = 0;
+        while (i < ptr_vector_len(block.children)) {
+            Node* stmt = ptr_vector_at(block.children, i);
+            codegen_stmt(ctx, stmt);
+            i := i + 1
+        }
+    }
+}
+
+// Generate code for a statement
+void codegen_stmt(CodegenContext ctx, Node* node) {
+    {
+        if (node.tag == 20) {  // Block
+            codegen_block(ctx, node)
+        } else {
+            if (node.tag == 14) {  // Assignment
+                {
+                    Node* lhs = ptr_vector_at(node.children, 0);
+                    Node* rhs = ptr_vector_at(node.children, 1);
+                    String rhs_val = codegen_expr(ctx, rhs);
+                    String store_instr = string_concat(string_concat(string_concat(
+                        string_slice("  store i32 ", 0, 12),
+                        rhs_val),
+                        string_concat(string_slice(", i32* %", 0, 8), lhs.lexeme)),
+                        string_slice("\n", 0, 1));
+                    codegen_emitln(ctx, store_instr)
+                }
+            } else {
+                if (node.tag == 15) {  // Function call (as statement)
+                    {
+                        Node* callee = ptr_vector_at(node.children, 0);
+                        Node* args_node = ptr_vector_at(node.children, 1);
+                        String func_name = callee.lexeme;
+                        int i = 0;
+                        PtrVector arg_vals = ptr_vector_new(ptr_vector_len(args_node.children));
+                        while (i < ptr_vector_len(args_node.children)) {
+                            Node* arg = ptr_vector_at(args_node.children, i);
+                            String arg_val = codegen_expr(ctx, arg);
+                            ptr_vector_push(arg_vals, arg_val);
+                            i := i + 1
+                        };
+                        String call_instr = string_concat(string_slice("  call i32 @", 0, 14), func_name);
+                        call_instr := string_concat(call_instr, string_slice("(i32 ", 0, 5));
+                        i := 0;
+                        while (i < ptr_vector_len(arg_vals)) {
+                            if (i > 0) {
+                                call_instr := string_concat(call_instr, string_slice(", i32 ", 0, 6))
+                            } else { 0 };
+                            call_instr := string_concat(call_instr, ptr_vector_at(arg_vals, i));
+                            i := i + 1
+                        };
+                        call_instr := string_concat(call_instr, string_slice(")\n", 0, 2));
+                        codegen_emitln(ctx, call_instr)
+                    }
+                } else {
+                    // Expression statement
+                    codegen_expr(ctx, node);
+                    0
+                }
+            }
+        }
+    }
+}
+
+// Generate code for a function declaration (Node tag 1)
+void codegen_function(CodegenContext ctx, Node* func) {
+    {
+        String name = func.lexeme;
+        Node* ty_node = ptr_vector_at(func.children, 0);
+        Node* params_node = ptr_vector_at(func.children, 1);
+        Node* body = ptr_vector_at(func.children, 2);
+
+        String ret_type = codegen_type_to_llvm(ty_node.lexeme);
+
+        ctx.current_function := name;
+        ctx.temp_counter := 0;
+
+        // Emit function header
+        String header = codegen_func_header(name, ret_type, params_node.children);
+        codegen_emit(ctx, header);
+
+        // Emit allocas for parameters
+        int i = 0;
+        while (i < ptr_vector_len(params_node.children)) {
+            Node* param = ptr_vector_at(params_node.children, i);
+            String alloca_instr = string_concat(string_concat(
+                string_concat(string_slice("  ", 0, 2), string_concat(string_slice("%", 0, 1), param.lexeme)),
+                string_slice(" = alloca i32\n", 0, 14)),
+                string_slice("", 0, 0));
+            codegen_emitln(ctx, alloca_instr);
+            // Store parameter value to alloca
+            String store_instr = string_concat(string_concat(string_concat(
+                string_slice("  store i32 %", 0, 13),
+                param.lexeme),
+                string_slice(", i32* %", 0, 8)),
+                string_concat(param.lexeme, string_slice("\n", 0, 1)));
+            codegen_emitln(ctx, store_instr);
+            i := i + 1
+        };
+
+        // Emit body
+        if (body.tag == 20) {
+            codegen_block(ctx, body)
+        } else {
+            codegen_stmt(ctx, body)
+        };
+
+        // Emit return (default return 0 if no explicit return)
+        String ret_instr = string_concat(string_slice("  ret i32 0\n", 0, 14), string_slice("", 0, 0));
+        codegen_emitln(ctx, ret_instr);
+
+        // Emit function footer
+        codegen_emitln(ctx, codegen_func_footer())
+    }
+}
+
+// Generate code for global variable (Node tag 2)
+void codegen_global(CodegenContext ctx, Node* gvar) {
+    {
+        String name = gvar.lexeme;
+        Node* ty_node = ptr_vector_at(gvar.children, 0);
+        String ty = codegen_type_to_llvm(ty_node.lexeme);
+        String decl = string_concat(string_concat(
+            string_concat(string_slice("@", 0, 1), name),
+            string_concat(string_slice(" = global ", 0, 10), ty)),
+            string_slice(" 0\n", 0, 3));
+        codegen_emitln(ctx, decl)
+    }
+}
+
+// Generate code for struct definition (Node tag 30)
+void codegen_struct(CodegenContext ctx, Node* st) {
+    {
+        String name = st.lexeme;
+        String struct_def = string_concat(string_concat(
+            string_slice("%struct.", 0, 8), name),
+            string_slice(" = type { ", 0, 10));
+        // Add fields
+        int i = 0;
+        while (i < ptr_vector_len(st.children)) {
+            Node* field = ptr_vector_at(st.children, i);
+            if (i > 0) {
+                struct_def := string_concat(struct_def, string_slice(", ", 0, 2))
+            };
+            Node* fty_node = ptr_vector_at(field.children, 0);
+            struct_def := string_concat(struct_def, codegen_type_to_llvm(fty_node.lexeme));
+            i := i + 1
+        };
+        struct_def := string_concat(struct_def, string_slice(" }\n", 0, 3));
+        codegen_emitln(ctx, struct_def)
+    }
+}
+
+// Generate code for protocol definition (Node tag 31) - emit as opaque struct
+void codegen_protocol(CodegenContext ctx, Node* proto) {
+    {
+        String name = proto.lexeme;
+        String proto_def = string_concat(string_concat(
+            string_slice("%protocol.", 0, 10), name),
+            string_slice(" = type opaque\n", 0, 16));
+        codegen_emitln(ctx, proto_def)
+    }
+}
+
+// Generate code for extern C block (Node tag 37)
+void codegen_extern_c(CodegenContext ctx, Node* ext) {
+    {
+        int i = 0;
+        while (i < ptr_vector_len(ext.children)) {
+            Node* decl = ptr_vector_at(ext.children, i);
+            // decl is a function or global decl
+            if (decl.tag == 1) {  // Function
+                String name = decl.lexeme;
+                Node* ty_node = ptr_vector_at(decl.children, 0);
+                Node* params_node = ptr_vector_at(decl.children, 1);
+                String ret_type = codegen_type_to_llvm(ty_node.lexeme);
+                String decl_str = string_concat(string_concat(
+                    string_concat(string_slice("declare ", 0, 8), ret_type),
+                    string_concat(string_slice(" @", 0, 3), name)),
+                    string_slice("(", 0, 1));
+                int j = 0;
+                while (j < ptr_vector_len(params_node.children)) {
+                    if (j > 0) {
+                        decl_str := string_concat(decl_str, string_slice(", ", 0, 2))
+                    };
+                    Node* param = ptr_vector_at(params_node.children, j);
+                    Node* pty_node = ptr_vector_at(param.children, 0);
+                    decl_str := string_concat(decl_str, codegen_type_to_llvm(pty_node.lexeme));
+                    j := j + 1
+                };
+                decl_str := string_concat(decl_str, string_slice(")\n", 0, 2));
+                codegen_emitln(ctx, decl_str)
+            } else { 0 };
+            i := i + 1
+        }
+    }
 }
 
 // Main codegen driver - generates complete LLVM module from AST
 String codegen_generate(CodegenContext ctx, Node* ast) {
     {
+        ctx.output := string_slice("", 0, 0);
+
         // Generate module header
-        String header = alloc<String>(32, alloc<char,Normal>(32));
-        
-        // Generate all function definitions
-        // (simplified - iterates over AST children)
-        
-        // Generate global declarations
-        
-        // Return complete LLVM IR
-        alloc<String>(1, alloc<char,Normal>(1))
+        codegen_emit_module_header(ctx);
+
+        // Process all top-level declarations
+        int i = 0;
+        while (i < ptr_vector_len(ast.children)) {
+            Node* decl = ptr_vector_at(ast.children, i);
+            if (decl.tag == 0) {  // Program (nested)
+                int j = 0;
+                while (j < ptr_vector_len(decl.children)) {
+                    Node* sub = ptr_vector_at(decl.children, j);
+                    if (sub.tag == 1) { codegen_function(ctx, sub) } else {
+                    if (sub.tag == 2) { codegen_global(ctx, sub) } else {
+                    if (sub.tag == 30) { codegen_struct(ctx, sub) } else {
+                    if (sub.tag == 31) { codegen_protocol(ctx, sub) } else {
+                    if (sub.tag == 37) { codegen_extern_c(ctx, sub) } else { 0 }
+                    }}}};
+                    j := j + 1
+                }
+            } else {
+                if (decl.tag == 1) { codegen_function(ctx, decl) } else {
+                if (decl.tag == 2) { codegen_global(ctx, decl) } else {
+                if (decl.tag == 30) { codegen_struct(ctx, decl) } else {
+                if (decl.tag == 31) { codegen_protocol(ctx, decl) } else {
+                if (decl.tag == 37) { codegen_extern_c(ctx, decl) } else { 0 }
+                }}}}
+            };
+            i := i + 1
+        };
+
+        ctx.output
     }
 }

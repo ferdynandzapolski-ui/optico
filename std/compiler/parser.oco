@@ -1,4 +1,15 @@
 // std/compiler/parser.oco - Parser for self-hosted OptiCo v0.3 compiler
+// Token tags from lexer.oco:
+// 0:EOF, 1:LBrace, 2:RBrace, 3:LParen, 4:RParen, 5:LBracket, 6:RBracket
+// 7:Semi, 8:Comma, 9:Dot, 10:Star, 11:Plus, 12:Arrow, 13:Minus
+// 14:PutOp (:=), 15:Colon, 16:Compose (|), 17:Eq (==), 18:Assign (=)
+// 19:At, 22:Not/Bang, 24:Ne (!=), 25:Le (<=), 26:Lt (<), 27:Ge (>=), 28:Gt (>)
+// 20:IntLit, 21:Ident, 22:Bang, 23:StringLit, 24:Ne, 59:Slash, 60:Percent
+// 30:int, 31:float, 32:bool, 33:char, 34:void, 35:struct, 36:resource
+// 37:protocol, 38:state, 39:traversal, 40:co, 41:optic, 42:rec, 43:atomic
+// 44:pointer, 45:next, 46:prev, 47:alloc, 48:free, 49:unsafe, 50:checked
+// 51:spawn, 52:if, 53:else, 54:return, 55:I, 56:true, 57:false
+// 61:CharLit, 62:FloatLit
 
 struct Parser {
     Lexer lexer;
@@ -13,10 +24,24 @@ void parser_expect(Parser p, int tag) {
     if (p.current.tag == tag) {
         parser_advance(p)
     } else {
-        // Error handling placeholder
         0
     }
 }
+
+int parser_match(Parser p, int tag) {
+    if (p.current.tag == tag) { 1 } else { 0 }
+}
+
+// Node tags:
+// 0:Program, 1:FuncDecl, 2:GlobalVar, 10:IntLit, 11:Ident, 13:Add, 14:Assign
+// 15:Call, 16:Args, 17:Mul, 18:Div, 19:Sub, 20:Block
+// 21:FloatLit, 22:StringLit, 23:CharLit, 24:BoolLit
+// 25:IfStmt, 26:WhileLoop, 27:ReturnStmt
+// 28:CmpOp, 29:LogicalOp
+// 30:StructDef, 31:ProtocolDef, 32:StructField, 33:ProtocolState, 34:StateOptic
+// 35:Param, 36:Params, 37:ExternC
+// 40:FieldAccess, 41:ArrayIndex, 42:UnaryMinus, 43:NotOp
+// 50:VarDecl
 
 Node* parser_parse_type(Parser p) {
     {
@@ -24,10 +49,10 @@ Node* parser_parse_type(Parser p) {
         int tag = p.current.tag;
         parser_advance(p);
 
-        Node* ty = alloc<Node>(5, tag, name, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0);
+        Node* ty = alloc<Node>(5, 0, name, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0);
 
         // Handle pointer/optic stars
-        if (p.current.tag == 10) { // Star
+        if (p.current.tag == 10) {
             {
                 parser_advance(p);
                 PtrVector children = ptr_vector_new(1);
@@ -40,89 +65,134 @@ Node* parser_parse_type(Parser p) {
     }
 }
 
+// Forward declarations
+Node* parser_parse_expr(Parser p);
+Node* parser_parse_stmt(Parser p);
+Node* parser_parse_block(Parser p);
+
 Node* parser_parse_primary(Parser p) {
     {
-        if (p.current.tag == 20) { // Number
+        if (p.current.tag == 20) { // Int literal
             {
                 String lex = p.current.lexeme;
                 parser_advance(p);
                 alloc<Node>(10, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
             }
         } else {
-            if (p.current.tag == 21) { // Ident
+            if (p.current.tag == 62) { // Float literal
                 {
                     String lex = p.current.lexeme;
                     parser_advance(p);
-                    alloc<Node>(11, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                    alloc<Node>(21, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
                 }
             } else {
-                if (p.current.tag == 3) { // LParen
+                if (p.current.tag == 23) { // String literal
                     {
+                        String lex = p.current.lexeme;
                         parser_advance(p);
-                        Node* e = parser_parse_expr(p);
-                        parser_expect(p, 4); // RParen
-                        e
+                        alloc<Node>(22, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
                     }
                 } else {
-                    if (p.current.tag == 1) { // LBrace (Block)
+                    if (p.current.tag == 61) { // Char literal
                         {
+                            String lex = p.current.lexeme;
                             parser_advance(p);
-                            PtrVector stmts = ptr_vector_new(4);
-                            parser_parse_block_stmts(p, stmts);
-                            parser_expect(p, 2); // RBrace
-                            alloc<Node>(20, 0, string_slice("", 0, 0), stmts, 0, 0, string_slice("", 0, 0), 0)
+                            alloc<Node>(23, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
                         }
                     } else {
-                        alloc<Node>(99, 0, string_slice("", 0, 0), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                        if (p.current.tag == 56) { // true
+                            {
+                                parser_advance(p);
+                                alloc<Node>(24, 0, string_slice("true", 0, 4), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                            }
+                        } else {
+                            if (p.current.tag == 57) { // false
+                                {
+                                    parser_advance(p);
+                                    alloc<Node>(24, 0, string_slice("false", 0, 5), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                                }
+                            } else {
+                                if (p.current.tag == 21) { // Ident
+                                    {
+                                        String lex = p.current.lexeme;
+                                        parser_advance(p);
+                                        alloc<Node>(11, 0, lex, ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                                    }
+                                } else {
+                                    if (p.current.tag == 3) { // LParen
+                                        {
+                                            parser_advance(p);
+                                            Node* e = parser_parse_expr(p);
+                                            parser_expect(p, 4); // RParen
+                                            e
+                                        }
+                                    } else {
+                                        if (p.current.tag == 1) { // LBrace - Block
+                                            parser_parse_block(p)
+                                        } else {
+                                            alloc<Node>(99, 0, string_slice("", 0, 0), ptr_vector_new(0), 0, 0, string_slice("", 0, 0), 0)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-void parser_parse_block_stmts(Parser p, PtrVector stmts) {
-    if (p.current.tag != 2) { // RBrace
-        {
-            ptr_vector_push(stmts, parser_parse_expr(p));
-            if (p.current.tag == 7) { // Semi
-                parser_advance(p);
-            } else { 0 };
-            parser_parse_block_stmts(p, stmts);
-        }
-    } else {
-        0
     }
 }
 
 Node* parser_parse_postfix(Parser p) {
     {
         Node* e = parser_parse_primary(p);
-        if (p.current.tag == 12) { // Arrow
+        if (p.current.tag == 3) { // LParen - Function call
             {
                 parser_advance(p);
-                String field = p.current.lexeme;
-                parser_advance(p);
-                PtrVector children = ptr_vector_new(1);
+                PtrVector args = ptr_vector_new(4);
+                parser_parse_args(p, args);
+                parser_expect(p, 4); // RParen
+                PtrVector children = ptr_vector_new(2);
                 ptr_vector_push(children, e);
-                alloc<Node>(12, 0, field, children, 0, 0, string_slice("", 0, 0), 0)
+                Node* args_node = alloc<Node>(16, 0, string_slice("args", 0, 4), args, 0, 0, string_slice("", 0, 0), 0);
+                ptr_vector_push(children, args_node);
+                alloc<Node>(15, 0, string_slice("call", 0, 4), children, 0, 0, string_slice("", 0, 0), 0)
             }
         } else {
-            if (p.current.tag == 3) { // Call LParen
+            if (p.current.tag == 5) { // LBracket - Array index
                 {
                     parser_advance(p);
-                    PtrVector args = ptr_vector_new(4);
-                    parser_parse_args(p, args);
-                    parser_expect(p, 4); // RParen
+                    Node* idx = parser_parse_expr(p);
+                    parser_expect(p, 6); // RBracket
                     PtrVector children = ptr_vector_new(2);
                     ptr_vector_push(children, e);
-
-                    Node* args_node = alloc<Node>(16, 0, string_slice("args", 0, 4), args, 0, 0, string_slice("", 0, 0), 0);
-                    ptr_vector_push(children, args_node);
-                    alloc<Node>(15, 0, string_slice("call", 0, 4), children, 0, 0, string_slice("", 0, 0), 0)
+                    ptr_vector_push(children, idx);
+                    alloc<Node>(41, 0, string_slice("", 0, 0), children, 0, 0, string_slice("", 0, 0), 0)
                 }
             } else {
-                e
+                if (p.current.tag == 9) { // Dot - Field access
+                    {
+                        parser_advance(p);
+                        String field_name = p.current.lexeme;
+                        parser_advance(p);
+                        PtrVector children = ptr_vector_new(1);
+                        ptr_vector_push(children, e);
+                        alloc<Node>(40, 0, field_name, children, 0, 0, string_slice("", 0, 0), 0)
+                    }
+                } else {
+                    if (p.current.tag == 12) { // Arrow - Field access through pointer
+                        {
+                            parser_advance(p);
+                            String field_name = p.current.lexeme;
+                            parser_advance(p);
+                            PtrVector children = ptr_vector_new(1);
+                            ptr_vector_push(children, e);
+                            alloc<Node>(40, 0, field_name, children, 0, 0, string_slice("", 0, 0), 0)
+                        }
+                    } else {
+                        e
+                    }
+                }
             }
         }
     }
@@ -142,9 +212,59 @@ void parser_parse_args(Parser p, PtrVector args) {
     } else { 0 }
 }
 
+Node* parser_parse_unary(Parser p) {
+    {
+        if (p.current.tag == 13) { // Unary minus
+            {
+                parser_advance(p);
+                Node* operand = parser_parse_unary(p);
+                PtrVector children = ptr_vector_new(1);
+                ptr_vector_push(children, operand);
+                alloc<Node>(42, 0, string_slice("-", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+            }
+        } else {
+            if (p.current.tag == 22) { // Not operator (!)
+                {
+                    parser_advance(p);
+                    Node* operand = parser_parse_unary(p);
+                    PtrVector children = ptr_vector_new(1);
+                    ptr_vector_push(children, operand);
+                    alloc<Node>(43, 0, string_slice("!", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                }
+            } else {
+                if (p.current.tag == 47) { // alloc
+                    {
+                        parser_advance(p);
+                        parser_expect(p, 3); // LParen
+                        Node* alloc_expr = parser_parse_expr(p);
+                        parser_expect(p, 4); // RParen
+                        PtrVector children = ptr_vector_new(1);
+                        ptr_vector_push(children, alloc_expr);
+                        alloc<Node>(47, 0, string_slice("alloc", 0, 5), children, 0, 0, string_slice("", 0, 0), 0)
+                    }
+                } else {
+                    if (p.current.tag == 48) { // free
+                        {
+                            parser_advance(p);
+                            parser_expect(p, 3); // LParen
+                            Node* free_expr = parser_parse_expr(p);
+                            parser_expect(p, 4); // RParen
+                            PtrVector children = ptr_vector_new(1);
+                            ptr_vector_push(children, free_expr);
+                            alloc<Node>(48, 0, string_slice("free", 0, 4), children, 0, 0, string_slice("", 0, 0), 0)
+                        }
+                    } else {
+                        parser_parse_postfix(p)
+                    }
+                }
+            }
+        }
+    }
+}
+
 Node* parser_parse_multiplicative(Parser p) {
     {
-        Node* e = parser_parse_postfix(p);
+        Node* e = parser_parse_unary(p);
         if (p.current.tag == 10) { // Star (Mul)
             {
                 parser_advance(p);
@@ -165,7 +285,18 @@ Node* parser_parse_multiplicative(Parser p) {
                     alloc<Node>(18, 0, string_slice("/", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
                 }
             } else {
-                e
+                if (p.current.tag == 60) { // Percent (Mod)
+                    {
+                        parser_advance(p);
+                        Node* right = parser_parse_multiplicative(p);
+                        PtrVector children = ptr_vector_new(2);
+                        ptr_vector_push(children, e);
+                        ptr_vector_push(children, right);
+                        alloc<Node>(60, 0, string_slice("%", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                    }
+                } else {
+                    e
+                }
             }
         }
     }
@@ -200,10 +331,110 @@ Node* parser_parse_additive(Parser p) {
     }
 }
 
-Node* parser_parse_expr(Parser p) {
+Node* parser_parse_comparison(Parser p) {
     {
         Node* e = parser_parse_additive(p);
-        if (p.current.tag == 18) { // Assign
+        if (p.current.tag == 17) { // Eq (==)
+            {
+                parser_advance(p);
+                Node* right = parser_parse_comparison(p);
+                PtrVector children = ptr_vector_new(2);
+                ptr_vector_push(children, e);
+                ptr_vector_push(children, right);
+                alloc<Node>(28, 0, string_slice("==", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+            }
+        } else {
+            if (p.current.tag == 24) { // Ne (!=)
+                {
+                    parser_advance(p);
+                    Node* right = parser_parse_comparison(p);
+                    PtrVector children = ptr_vector_new(2);
+                    ptr_vector_push(children, e);
+                    ptr_vector_push(children, right);
+                    alloc<Node>(28, 0, string_slice("!=", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+                }
+            } else {
+                if (p.current.tag == 26) { // Lt (<)
+                    {
+                        parser_advance(p);
+                        Node* right = parser_parse_comparison(p);
+                        PtrVector children = ptr_vector_new(2);
+                        ptr_vector_push(children, e);
+                        ptr_vector_push(children, right);
+                        alloc<Node>(28, 0, string_slice("<", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                    }
+                } else {
+                    if (p.current.tag == 28) { // Gt (>)
+                        {
+                            parser_advance(p);
+                            Node* right = parser_parse_comparison(p);
+                            PtrVector children = ptr_vector_new(2);
+                            ptr_vector_push(children, e);
+                            ptr_vector_push(children, right);
+                            alloc<Node>(28, 0, string_slice(">", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
+                        }
+                    } else {
+                        if (p.current.tag == 25) { // Le (<=)
+                            {
+                                parser_advance(p);
+                                Node* right = parser_parse_comparison(p);
+                                PtrVector children = ptr_vector_new(2);
+                                ptr_vector_push(children, e);
+                                ptr_vector_push(children, right);
+                                alloc<Node>(28, 0, string_slice("<=", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+                            }
+                        } else {
+                            if (p.current.tag == 27) { // Ge (>=)
+                                {
+                                    parser_advance(p);
+                                    Node* right = parser_parse_comparison(p);
+                                    PtrVector children = ptr_vector_new(2);
+                                    ptr_vector_push(children, e);
+                                    ptr_vector_push(children, right);
+                                    alloc<Node>(28, 0, string_slice(">=", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+                                }
+                            } else {
+                                e
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+Node* parser_parse_logical(Parser p) {
+    {
+        Node* e = parser_parse_comparison(p);
+        if (p.current.tag == 16) { // Compose (|) - used as logical OR in some contexts
+            {
+                parser_advance(p);
+                Node* right = parser_parse_logical(p);
+                PtrVector children = ptr_vector_new(2);
+                ptr_vector_push(children, e);
+                ptr_vector_push(children, right);
+                alloc<Node>(29, 0, string_slice("||", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+            }
+        } else {
+            if (p.current.tag == 22 && lexer_peek(p.lexer) == '=') { // != already handled above
+                0
+            } else {
+                if (p.current.tag == 22) { // ! alone is unary, handled in unary
+                    0
+                } else {
+                    e
+                }
+            };
+            e
+        }
+    }
+}
+
+Node* parser_parse_expr(Parser p) {
+    {
+        Node* e = parser_parse_logical(p);
+        if (p.current.tag == 18) { // Assign (=)
             {
                 parser_advance(p);
                 Node* val = parser_parse_expr(p);
@@ -213,7 +444,218 @@ Node* parser_parse_expr(Parser p) {
                 alloc<Node>(14, 0, string_slice("=", 0, 1), children, 0, 0, string_slice("", 0, 0), 0)
             }
         } else {
-            e
+            if (p.current.tag == 14) { // PutOp (:=)
+                {
+                    parser_advance(p);
+                    Node* val = parser_parse_expr(p);
+                    PtrVector children = ptr_vector_new(2);
+                    ptr_vector_push(children, e);
+                    ptr_vector_push(children, val);
+                    alloc<Node>(14, 0, string_slice(":=", 0, 2), children, 0, 0, string_slice("", 0, 0), 0)
+                }
+            } else {
+                e
+            }
+        }
+    }
+}
+
+Node* parser_parse_block(Parser p) {
+    {
+        parser_expect(p, 1); // LBrace
+        PtrVector stmts = ptr_vector_new(4);
+        parser_parse_block_stmts(p, stmts);
+        parser_expect(p, 2); // RBrace
+        alloc<Node>(20, 0, string_slice("", 0, 0), stmts, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+void parser_parse_block_stmts(Parser p, PtrVector stmts) {
+    if (p.current.tag != 2) { // RBrace
+        {
+            Node* stmt = parser_parse_stmt(p);
+            ptr_vector_push(stmts, stmt);
+            if (p.current.tag == 7) { // Semi
+                parser_advance(p);
+            } else { 0 };
+            parser_parse_block_stmts(p, stmts);
+        }
+    } else {
+        0
+    }
+}
+
+Node* parser_parse_while(Parser p) {
+    {
+        parser_advance(p); // skip 'while' (tag 51)
+        parser_expect(p, 3); // LParen
+        Node* cond = parser_parse_expr(p);
+        parser_expect(p, 4); // RParen
+        Node* body = parser_parse_block(p);
+        PtrVector children = ptr_vector_new(2);
+        ptr_vector_push(children, cond);
+        ptr_vector_push(children, body);
+        alloc<Node>(26, 0, string_slice("", 0, 0), children, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_if(Parser p) {
+    {
+        parser_advance(p); // skip 'if' (tag 52)
+        parser_expect(p, 3); // LParen
+        Node* cond = parser_parse_expr(p);
+        parser_expect(p, 4); // RParen
+        Node* then_branch = parser_parse_block(p);
+        if (p.current.tag == 53) { // else
+            {
+                parser_advance(p);
+                Node* else_branch;
+                if (p.current.tag == 52) { // else if
+                    else_branch := parser_parse_if(p)
+                } else {
+                    else_branch := parser_parse_block(p)
+                };
+                PtrVector children = ptr_vector_new(3);
+                ptr_vector_push(children, cond);
+                ptr_vector_push(children, then_branch);
+                ptr_vector_push(children, else_branch);
+                alloc<Node>(25, 0, string_slice("", 0, 0), children, 0, 0, string_slice("", 0, 0), 0)
+            }
+        } else {
+            PtrVector children = ptr_vector_new(2);
+            ptr_vector_push(children, cond);
+            ptr_vector_push(children, then_branch);
+            alloc<Node>(25, 0, string_slice("", 0, 0), children, 0, 0, string_slice("", 0, 0), 0)
+        }
+    }
+}
+
+Node* parser_parse_return(Parser p) {
+    {
+        parser_advance(p); // skip 'return' (tag 54)
+        Node* expr = parser_parse_expr(p);
+        PtrVector children = ptr_vector_new(1);
+        ptr_vector_push(children, expr);
+        alloc<Node>(27, 0, string_slice("", 0, 0), children, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_spawn(Parser p) {
+    {
+        parser_advance(p); // skip 'spawn' (tag 51)
+        parser_expect(p, 3); // LParen
+        Node* expr = parser_parse_expr(p);
+        parser_expect(p, 4); // RParen
+        PtrVector children = ptr_vector_new(1);
+        ptr_vector_push(children, expr);
+        alloc<Node>(51, 0, string_slice("spawn", 0, 5), children, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_checked(Parser p) {
+    {
+        parser_advance(p); // skip 'checked' (tag 50)
+        parser_expect(p, 3); // LParen
+        Node* expr = parser_parse_expr(p);
+        parser_expect(p, 4); // RParen
+        PtrVector children = ptr_vector_new(1);
+        ptr_vector_push(children, expr);
+        alloc<Node>(50, 0, string_slice("checked", 0, 7), children, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_next_prev(Parser p) {
+    {
+        int tag = p.current.tag;
+        String name = p.current.lexeme;
+        parser_advance(p);
+        parser_expect(p, 3); // LParen
+        Node* expr = parser_parse_expr(p);
+        parser_expect(p, 4); // RParen
+        PtrVector children = ptr_vector_new(1);
+        ptr_vector_push(children, expr);
+        alloc<Node>(tag, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_stmt(Parser p) {
+    {
+        if (p.current.tag == 52) { // if
+            parser_parse_if(p)
+        } else {
+            if (p.current.tag == 51) { // while
+                parser_parse_while(p)
+            } else {
+                if (p.current.tag == 54) { // return
+                    parser_parse_return(p)
+                } else {
+                    if (p.current.tag == 51) { // spawn
+                        parser_parse_spawn(p)
+                    } else {
+                        if (p.current.tag == 50) { // checked
+                            parser_parse_checked(p)
+                        } else {
+                            if (p.current.tag == 45) { // next
+                                parser_parse_next_prev(p)
+                            } else {
+                                if (p.current.tag == 46) { // prev
+                                    parser_parse_next_prev(p)
+                                } else {
+                                    // Could be variable declaration or expression
+                                    if (p.current.tag == 30 || p.current.tag == 31 ||
+                                        p.current.tag == 32 || p.current.tag == 33 ||
+                                        p.current.tag == 34) { // Type keywords
+                                        parser_parse_var_decl_or_expr(p)
+                                    } else {
+                                        parser_parse_expr(p)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+Node* parser_parse_var_decl_or_expr(Parser p) {
+    {
+        // Parse type first
+        Node* ty = parser_parse_type(p);
+        String name = p.current.lexeme;
+        parser_advance(p);
+
+        if (p.current.tag == 3) { // LParen - this is a function, not var decl
+            {
+                parser_advance(p); // (
+                PtrVector params = ptr_vector_new(4);
+                parser_parse_params(p, params);
+                parser_expect(p, 4); // )
+                Node* body = parser_parse_block(p);
+                PtrVector children = ptr_vector_new(3);
+                ptr_vector_push(children, ty);
+                Node* params_node = alloc<Node>(36, 0, string_slice("params", 0, 6), params, 0, 0, string_slice("", 0, 0), 0);
+                ptr_vector_push(children, params_node);
+                ptr_vector_push(children, body);
+                alloc<Node>(1, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+            }
+        } else {
+            if (p.current.tag == 18) { // Assign (=) - variable declaration with init
+                {
+                    parser_advance(p);
+                    Node* init = parser_parse_expr(p);
+                    PtrVector children = ptr_vector_new(2);
+                    ptr_vector_push(children, ty);
+                    ptr_vector_push(children, init);
+                    alloc<Node>(50, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+                }
+            } else {
+                // Global variable or just a type with name (no init)
+                PtrVector children = ptr_vector_new(1);
+                ptr_vector_push(children, ty);
+                alloc<Node>(2, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
+            }
         }
     }
 }
@@ -237,7 +679,7 @@ void parser_parse_struct_fields(Parser p, PtrVector fields) {
 
 Node* parser_parse_struct(Parser p) {
     {
-        parser_advance(p); // skip 'struct'
+        parser_advance(p); // skip 'struct' (tag 35)
         String name = p.current.lexeme;
         parser_advance(p);
         parser_expect(p, 1); // LBrace
@@ -245,6 +687,23 @@ Node* parser_parse_struct(Parser p) {
         parser_parse_struct_fields(p, fields);
         parser_expect(p, 2); // RBrace
         alloc<Node>(30, 0, name, fields, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+void parser_parse_state_optics(Parser p, PtrVector optics) {
+    if (p.current.tag != 2) { // RBrace
+        {
+            Node* ty = parser_parse_type(p);
+            String name = p.current.lexeme;
+            parser_advance(p);
+            parser_expect(p, 7); // Semi
+            PtrVector children = ptr_vector_new(1);
+            ptr_vector_push(children, ty);
+            ptr_vector_push(optics, alloc<Node>(34, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
+            parser_parse_state_optics(p, optics);
+        }
+    } else {
+        0
     }
 }
 
@@ -266,26 +725,9 @@ void parser_parse_protocol_states(Parser p, PtrVector states) {
     }
 }
 
-void parser_parse_state_optics(Parser p, PtrVector optics) {
-    if (p.current.tag != 2) { // RBrace
-        {
-            Node* ty = parser_parse_type(p);
-            String name = p.current.lexeme;
-            parser_advance(p);
-            parser_expect(p, 7); // Semi
-            PtrVector children = ptr_vector_new(1);
-            ptr_vector_push(children, ty);
-            ptr_vector_push(optics, alloc<Node>(34, 0, name, children, 0, 0, string_slice("", 0, 0), 0));
-            parser_parse_state_optics(p, optics);
-        }
-    } else {
-        0
-    }
-}
-
 Node* parser_parse_protocol(Parser p) {
     {
-        parser_advance(p); // skip 'protocol'
+        parser_advance(p); // skip 'protocol' (tag 37)
         String name = p.current.lexeme;
         parser_advance(p);
         parser_expect(p, 1); // LBrace
@@ -293,6 +735,23 @@ Node* parser_parse_protocol(Parser p) {
         parser_parse_protocol_states(p, states);
         parser_expect(p, 2); // RBrace
         alloc<Node>(31, 0, name, states, 0, 0, string_slice("", 0, 0), 0)
+    }
+}
+
+Node* parser_parse_resource(Parser p) {
+    {
+        parser_advance(p); // skip 'resource' (tag 36)
+        String name = p.current.lexeme;
+        parser_advance(p);
+        parser_expect(p, 15); // Colon
+        Node* ty = parser_parse_type(p);
+        parser_expect(p, 18); // Assign
+        Node* init = parser_parse_expr(p);
+        parser_expect(p, 7); // Semi
+        PtrVector children = ptr_vector_new(2);
+        ptr_vector_push(children, ty);
+        ptr_vector_push(children, init);
+        alloc<Node>(36, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
     }
 }
 
@@ -319,8 +778,9 @@ void parser_parse_params(Parser p, PtrVector params) {
 
 Node* parser_parse_extern_c(Parser p) {
     {
-        parser_advance(p); // skip 'extern'
-        parser_advance(p); // skip '"C"'
+        parser_advance(p); // skip 'extern' (tag 39)
+        // Skip "C" token - assume it's a string literal or ident
+        parser_advance(p); // skip "C"
         parser_expect(p, 1); // LBrace
         PtrVector decls = ptr_vector_new(4);
         parser_parse_extern_decls(p, decls);
@@ -349,36 +809,14 @@ Node* parser_parse_decl(Parser p) {
             if (p.current.tag == 37) { // protocol
                 parser_parse_protocol(p)
             } else {
-                if (p.current.tag == 39) { // extern
-                    parser_parse_extern_c(p)
+                if (p.current.tag == 36) { // resource
+                    parser_parse_resource(p)
                 } else {
-                    // Simplified function/global decl
-                    {
-                        Node* ty = parser_parse_type(p);
-                        String name = p.current.lexeme;
-                        parser_advance(p);
-                        if (p.current.tag == 3) { // Function LParen
-                            {
-                                parser_advance(p); // (
-                                PtrVector params = ptr_vector_new(4);
-                                parser_parse_params(p, params);
-                                parser_expect(p, 4); // )
-                                Node* body = parser_parse_primary(p);
-                                PtrVector children = ptr_vector_new(3);
-                                ptr_vector_push(children, ty);
-
-                                Node* params_node = alloc<Node>(36, 0, string_slice("params", 0, 6), params, 0, 0, string_slice("", 0, 0), 0);
-                                ptr_vector_push(children, params_node);
-                                ptr_vector_push(children, body);
-                                alloc<Node>(1, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
-                            }
-                        } else {
-                            {
-                                PtrVector children = ptr_vector_new(1);
-                                ptr_vector_push(children, ty);
-                                alloc<Node>(2, 0, name, children, 0, 0, string_slice("", 0, 0), 0)
-                            }
-                        }
+                    if (p.current.tag == 39) { // extern
+                        parser_parse_extern_c(p)
+                    } else {
+                        // Function or variable declaration
+                        parser_parse_var_decl_or_expr(p)
                     }
                 }
             }
@@ -387,7 +825,7 @@ Node* parser_parse_decl(Parser p) {
 }
 
 void parser_parse_program_decls(Parser p, PtrVector decls) {
-    if (p.current.tag != 0) { // EOF (assumed tag 0)
+    if (p.current.tag != 0) { // EOF
         {
             ptr_vector_push(decls, parser_parse_decl(p));
             if (p.current.tag == 7) { // Semi
