@@ -1,0 +1,10 @@
+// std/compiler/lexer_minimal.oco - Minimal lexer for bootstrap
+// Only supports basic tokens that bootstrap compiler can handle
+
+int lexer_next_token() {
+    return 0;  // EOF token
+}
+
+int lexer_new() {
+    return 1;  // Dummy lexer
+}

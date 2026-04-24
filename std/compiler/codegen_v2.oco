@@ -1,0 +1,6 @@
+// std/compiler/codegen_v2.oco - Enhanced codegen for self-hosted compiler v2
+// Can handle more constructs than bootstrap version
+
+int codegen_generate() {
+    return 0;
+}

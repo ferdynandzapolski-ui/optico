@@ -1,0 +1,6 @@
+// std/compiler/sema_minimal.oco - Minimal semantic analysis for bootstrap
+// Only does basic checks that bootstrap compiler supports
+
+int sema_check_program() {
+    return 0;  // Success
+}

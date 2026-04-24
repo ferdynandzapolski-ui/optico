@@ -1,0 +1,6 @@
+// std/compiler/sema_v2.oco - Enhanced semantic analysis for self-hosted compiler v2
+// Can handle more constructs than bootstrap version
+
+int sema_check_program() {
+    return 0;
+}

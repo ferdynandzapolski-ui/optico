@@ -1,0 +1,6 @@
+// std/compiler/codegen_bootstrap.oco - Codegen that bootstrap compiler can handle
+// Uses only basic constructs: int functions, variables, arithmetic
+
+int codegen_generate() {
+    return 0;
+}

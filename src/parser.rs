@@ -557,17 +557,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_postfix_expr(&mut self) -> Expr {
-        let mut e = match &self.current_token {
-            Token::Minus => {
-                self.advance();
-                Expr::BinOp(BinOpKind::Sub, Box::new(Expr::ConstInt(0)), Box::new(self.parse_postfix_expr()))
-            }
-            Token::Plus => {
-                self.advance();
-                self.parse_postfix_expr()
-            }
-            _ => self.parse_primary_expr(),
-        };
+        let mut e = self.parse_primary_expr();
         loop {
             match &self.current_token {
                 Token::Arrow | Token::Dot => {
@@ -579,11 +569,6 @@ impl<'a> Parser<'a> {
                     };
                     self.advance();
                     e = Expr::Access(Box::new(e), field);
-                }
-                Token::Assign => {
-                    self.advance();
-                    let val = self.parse_expr();
-                    e = Expr::FieldAssign(Box::new(e), Box::new(val));
                 }
                 Token::LBracket => {
                     self.advance();
@@ -608,7 +593,7 @@ impl<'a> Parser<'a> {
             Token::LBrace => {
                 self.advance();
                 let mut exprs = Vec::new();
-                while self.current_token != Token::RBrace && self.current_token != Token::EOF {
+                while self.current_token != Token::RBrace {
                     exprs.push(self.parse_expr());
                     if self.current_token == Token::Semi {
                         self.advance();

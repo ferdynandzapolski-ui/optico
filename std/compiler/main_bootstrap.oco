@@ -1,0 +1,10 @@
+// std/compiler/main_bootstrap.oco - Main compiler that bootstrap compiler can handle
+// Uses only basic constructs: int functions, variables, arithmetic
+
+int compile_file() {
+    return 0;
+}
+
+int main() {
+    return 0;
+}
