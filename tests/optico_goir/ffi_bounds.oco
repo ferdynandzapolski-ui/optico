@@ -1,0 +1,11 @@
+extern "C" {
+    void* malloc(int size);
+    void free(void* ptr);
+}
+
+void main() {
+    pointer<int, 0> p = malloc(4);
+    *p = 42;
+    int x = *p;
+    free(p);
+}
