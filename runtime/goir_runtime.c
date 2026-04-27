@@ -37,6 +37,7 @@ void* __go_malloc(size_t n, go_grade_t* out_g) {
         g.base = (uint64_t)p;
         g.end = (uint64_t)p + n;
         g.flags = GO_BOUNDS_KIND_OBJECT;
+        g.perms = 0xF; // RWF X
     }
     if (out_g) *out_g = g;
     __go_trace_event(GO_EVENT_INIT, p, g, "none", "malloc", dummy_site);
@@ -55,18 +56,19 @@ void* __go_realloc(void* p, size_t n, go_grade_t* out_g) {
         g.base = (uint64_t)new_p;
         g.end = (uint64_t)new_p + n;
         g.flags = GO_BOUNDS_KIND_OBJECT;
+        g.perms = 0xF;
     }
     if (out_g) *out_g = g;
     __go_trace_event(GO_EVENT_INIT, new_p, g, "none", "realloc", dummy_site);
     return new_p;
 }
 
-// Support for LowerPass names
 go_grade_t __go_grade_from_alloca(void* p, size_t n) {
     go_grade_t g = {0};
     g.base = (uint64_t)p;
     g.end = (uint64_t)p + n;
     g.flags = GO_BOUNDS_KIND_OBJECT;
+    g.perms = 0xF;
     return g;
 }
 
@@ -75,9 +77,6 @@ go_grade_t __go_grade_from_malloc(void* p, size_t n) {
 }
 
 go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale) {
-    // Spatial safety: technically, object bounds don't change on GEP.
-    // However, if we wanted to enforce subobject bounds, we would tighten g.base/g.end here.
-    // In this MVP, we preserve object-level bounds for compatibility.
     g.flags |= GO_BOUNDS_KIND_SUBOBJECT;
     return g;
 }
@@ -90,13 +89,25 @@ go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2) {
     return g_top;
 }
 
-// Improved Shadow metadata (hybrid) - Open addressing with linear probing
 #define SHADOW_CAP (1 << 20)
 static struct { void* addr; go_grade_t g; } shadow_map[SHADOW_CAP];
 
+static void __go_shadow_clear(void* slot_addr) {
+    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
+    for (int i = 0; i < 16; ++i) {
+        unsigned idx = (h + i) & (SHADOW_CAP - 1);
+        if (shadow_map[idx].addr == slot_addr) {
+            shadow_map[idx].addr = NULL;
+            memset(&shadow_map[idx].g, 0, sizeof(go_grade_t));
+            return;
+        }
+        if (shadow_map[idx].addr == NULL) break;
+    }
+}
+
 void __go_shadow_store(void* slot_addr, go_grade_t g) {
     unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) { // Limited probing
+    for (int i = 0; i < 16; ++i) {
         unsigned idx = (h + i) & (SHADOW_CAP - 1);
         if (shadow_map[idx].addr == NULL || shadow_map[idx].addr == slot_addr) {
             shadow_map[idx].addr = slot_addr;
@@ -104,7 +115,6 @@ void __go_shadow_store(void* slot_addr, go_grade_t g) {
             return;
         }
     }
-    // Fallback: overwrite first slot if full
     shadow_map[h].addr = slot_addr;
     shadow_map[h].g = g;
 }
@@ -124,5 +134,85 @@ void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind) {
     __go_check_store(dst, gdst, n);
     __go_check_load(src, gsrc, n);
+
+    for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+        go_grade_t g = __go_shadow_load((void*)((char*)src + i));
+        if (g.end != -1ULL || g.base != 0) {
+             __go_shadow_store((char*)dst + i, g);
+        } else {
+             __go_shadow_clear((char*)dst + i);
+        }
+    }
     memcpy(dst, src, n);
+}
+
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind) {
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+
+    if (dst < src || (char*)dst >= (const char*)src + n) {
+        for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+            go_grade_t g = __go_shadow_load((void*)((char*)src + i));
+            if (g.end != -1ULL || g.base != 0) {
+                 __go_shadow_store((char*)dst + i, g);
+            } else {
+                 __go_shadow_clear((char*)dst + i);
+            }
+        }
+    } else {
+        for (size_t i = (n / sizeof(void*)) * sizeof(void*); i >= sizeof(void*); i -= sizeof(void*)) {
+             size_t off = i - sizeof(void*);
+             go_grade_t g = __go_shadow_load((void*)((char*)src + off));
+             if (g.end != -1ULL || g.base != 0) {
+                  __go_shadow_store((char*)dst + off, g);
+             } else {
+                  __go_shadow_clear((char*)dst + off);
+             }
+        }
+    }
+    memmove(dst, src, n);
+}
+
+void __go_memset(void* s, int c, size_t n, go_grade_t g) {
+    __go_check_store(s, g, n);
+    for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+        __go_shadow_clear((char*)s + i);
+    }
+    memset(s, c, n);
+}
+
+#define EXPOSURE_CAP 1024
+static struct { uint64_t base; go_grade_t g; } exposure_set[EXPOSURE_CAP];
+static int exposure_count = 0;
+
+void __go_prov_expose(const void* p, go_grade_t g) {
+    if (exposure_count < EXPOSURE_CAP) {
+        exposure_set[exposure_count].base = g.base;
+        exposure_set[exposure_count].g = g;
+        exposure_count++;
+    }
+    __go_trace_event(GO_EVENT_PROV_EXPOSE, p, g, "prov", "exposed", dummy_site);
+}
+
+go_ptr_grade_t __go_inttoptr_resolve(uintptr_t i, int policy) {
+    go_ptr_grade_t res;
+    res.ptr = (void*)i;
+
+    res.grade.base = 0;
+    res.grade.end = -1ULL;
+    res.grade.perms = 0xF;
+    res.grade.flags = 0;
+
+    if (policy == 1) { // PNVI-ae
+        for (int j = 0; j < exposure_count; ++j) {
+            if (i >= exposure_set[j].g.base && i < exposure_set[j].g.end) {
+                res.grade = exposure_set[j].g;
+                break;
+            }
+        }
+    }
+
+    __go_trace_event(GO_EVENT_INTTOPTR_RESOLVE, (void*)i, res.grade, "prov", "resolved", dummy_site);
+    return res;
 }

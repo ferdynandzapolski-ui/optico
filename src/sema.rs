@@ -284,6 +284,16 @@ impl Sema {
                 self.check_expr(value, env, res_consumed, local_resources);
                 Type::Void
             }
+            Expr::IndexAssign(base, index, value) => {
+                let ty1 = self.check_expr(base, env, res_consumed, local_resources);
+                let ty2 = self.check_expr(index, env, res_consumed, local_resources);
+                let _ty3 = self.check_expr(value, env, res_consumed, local_resources);
+                if ty2 != Type::Int { panic!("Index must be integer"); }
+                match ty1 {
+                    Type::Pointer(..) | Type::Traversal(..) | Type::Optic(..) => Type::Void,
+                    _ => panic!("IndexAssign requires pointer, traversal, or optic type, found {:?}", ty1),
+                }
+            }
             Expr::Var(n) => {
                 if n == "is_null" { return Type::Int; }
                 if let Some(dur) = self.resource_durability.get(n).cloned() {

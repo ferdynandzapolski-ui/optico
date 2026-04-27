@@ -197,15 +197,14 @@ impl CodeGenerator {
             }
             Expr::IndexAssign(base, index, value) => {
                 // For index assignment: base[index] = value
-                // Get the pointer to the base array
                 let (base_code, base_ptr) = self.gen_expr_value(base, indent);
                 let (index_code, index_val) = self.gen_expr_value(index, indent);
                 let (value_code, value_val) = self.gen_expr_value(value, indent);
                 
-                // Generate getelementptr to get pointer to array element
                 let elem_ptr = self.new_temp();
-                format!("{}{}{}{}  %{} = getelementptr i32, i32* {}, i32 {}\n  store i32 {}, i32* %{}\n",
-                    base_code, index_code, value_code, indent_str, elem_ptr, base_ptr, index_val, value_val, elem_ptr)
+                format!("{}{}  %{} = getelementptr i32, i32* {}, i32 {}\n{}{}  store i32 {}, i32* %{}\n",
+                    base_code, index_code, elem_ptr, base_ptr, index_val,
+                    value_code, indent_str, value_val, elem_ptr)
             }
             Expr::If(cond, then_branch, else_branch) => {
                 let (cond_code, cond_val) = self.gen_expr_value(cond, indent);
@@ -311,6 +310,15 @@ impl CodeGenerator {
                     // Parameter or global
                     ("".to_string(), format!("%{}", name))
                 }
+            }
+            Expr::Index(base, index) => {
+                let (base_code, base_ptr) = self.gen_expr_value(base, indent);
+                let (index_code, index_val) = self.gen_expr_value(index, indent);
+                let elem_ptr = self.new_temp();
+                let res_val = self.new_temp();
+                let code = format!("{}{}  %{} = getelementptr i32, i32* {}, i32 {}\n  %{} = load i32, i32* %{}\n",
+                    base_code, index_code, elem_ptr, base_ptr, index_val, res_val, elem_ptr);
+                (code, format!("%{}", res_val))
             }
             Expr::BinOp(kind, left, right) => {
                 let (left_code, left_val) = self.gen_expr_value(left, indent);

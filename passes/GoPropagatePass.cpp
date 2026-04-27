@@ -79,7 +79,8 @@ PreservedAnalyses GoPropagatePass::run(Module &M, ModuleAnalysisManager &AM) {
                 for (Instruction &I : BB) {
                     if (auto *CI = dyn_cast<CallInst>(&I)) {
                         Function *Callee = CI->getCalledFunction();
-                        if (Callee && Callee->getName().starts_with("llvm.memcpy")) {
+                        if (Callee && (Callee->getName().starts_with("llvm.memcpy") ||
+                                       Callee->getName().starts_with("llvm.memmove"))) {
                             Value *Dst = CI->getArgOperand(0);
                             Value *Src = CI->getArgOperand(1);
                             if (GradeMap.count(Dst) && !CI->getMetadata("go.grade.dst")) {
@@ -88,6 +89,12 @@ PreservedAnalyses GoPropagatePass::run(Module &M, ModuleAnalysisManager &AM) {
                             }
                             if (GradeMap.count(Src) && !CI->getMetadata("go.grade.src")) {
                                 CI->setMetadata("go.grade.src", MDNode::get(M.getContext(), ValueAsMetadata::get(GradeMap[Src])));
+                                Changed = true;
+                            }
+                        } else if (Callee && Callee->getName().starts_with("llvm.memset")) {
+                            Value *Dst = CI->getArgOperand(0);
+                            if (GradeMap.count(Dst) && !CI->getMetadata("go.grade")) {
+                                CI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(GradeMap[Dst])));
                                 Changed = true;
                             }
                         }

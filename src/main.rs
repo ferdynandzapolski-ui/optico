@@ -12,6 +12,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut prov_policy = "pnvi-plain";
     let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
@@ -19,6 +20,8 @@ fn main() {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            prov_policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
@@ -27,9 +30,22 @@ fn main() {
     }
 
     if input_files.is_empty() {
-        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>]");
+        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>] [--goir-provenance-policy=<pnvi-plain|pnvi-ae>]");
         return;
     }
+
+    let tier_val = match tier {
+        "diag" => 0,
+        "hybrid" => 1,
+        "cap" => 2,
+        _ => 0,
+    };
+
+    let policy_val = match prov_policy {
+        "pnvi-plain" => 0,
+        "pnvi-ae" => 1,
+        _ => 0,
+    };
 
     let mut all_decls = Vec::new();
     for file in &input_files {
@@ -78,6 +94,8 @@ fn main() {
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
              .arg(format!("-passes={}", goir_passes))
+             .arg(format!("-go-tier={}", tier_val))
+             .arg(format!("-go-prov-policy={}", policy_val))
              .arg("-S")
              .arg(&llvm_path)
              .arg("-o")
@@ -86,7 +104,7 @@ fn main() {
 
         if let Ok(s) = opt_status {
             if s.success() {
-                println!("  [1/3] opt: Successfully instrumented -> {:?}", output_ll);
+                println!("  [1/3] opt: Successfully instrumented (tier={}, policy={}) -> {:?}", tier, prov_policy, output_ll);
 
                 // 2. llc to object code
                 let llc_status = Command::new("llc")
