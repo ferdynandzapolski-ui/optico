@@ -12,6 +12,9 @@ using namespace llvm;
 static cl::opt<int> GoTier("go-tier", cl::init(0),
   cl::desc("GOIR enforcement tier (0: diag, 1: hybrid, 2: cap)"));
 
+static cl::opt<int> GoProvPolicy("go-prov-policy", cl::init(0),
+  cl::desc("GOIR provenance policy (0: pnvi-plain, 1: pnvi-ae)"));
+
 namespace llvm {
 
   void GoInitPass::ensureTypes(Module &M) {
@@ -43,9 +46,10 @@ namespace llvm {
   }
 
   PreservedAnalyses GoInitPass::run(Module &M, ModuleAnalysisManager &AM) {
-    errs() << "GoInitPass running on module: " << M.getName() << " with tier " << GoTier << "\n";
+    errs() << "GoInitPass running on module: " << M.getName() << " with tier " << GoTier << " and policy " << GoProvPolicy << "\n";
 
     M.addModuleFlag(Module::Error, "go-tier", GoTier);
+    M.addModuleFlag(Module::Error, "go-prov-policy", GoProvPolicy);
     ensureTypes(M);
 
     for (Function &F : M) {

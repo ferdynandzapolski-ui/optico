@@ -26,6 +26,11 @@ typedef struct {
     uint32_t flags;      // includes version, bounds-kind, exposed
 } go_grade_t;
 
+typedef struct {
+    void* ptr;
+    go_grade_t grade;
+} go_ptr_grade_t;
+
 // Allocation wrappers
 void* __go_malloc(size_t n, go_grade_t* out_g);
 void  __go_free(void* p, go_grade_t g);
@@ -43,6 +48,13 @@ go_grade_t __go_shadow_load(void* slot_addr);
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind);
+void __go_memset(void* s, int c, size_t n, go_grade_t g);
+
+// Provenance
+void __go_prov_expose(const void* p, go_grade_t g);
+go_ptr_grade_t __go_inttoptr_resolve(uintptr_t i, int policy);
 
 #ifdef __cplusplus
 }
