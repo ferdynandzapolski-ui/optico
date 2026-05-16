@@ -44,6 +44,13 @@ go_grade_t __go_shadow_load(void* slot_addr);
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
 
+static inline go_grade_t __go_get_top_grade() {
+    go_grade_t g = {0};
+    g.end = -1ULL;
+    g.perms = 0xF;
+    return g;
+}
+
 #ifdef __cplusplus
 }
 #endif
