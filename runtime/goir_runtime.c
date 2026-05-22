@@ -16,11 +16,17 @@ void __go_check_load(const void* p, go_grade_t g, size_t n) {
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
         go_trap("bounds", "OOB load", p, g);
     }
+    if (g.perms != 0 && !(g.perms & 1)) {
+        go_trap("perms", "Read permission denied", p, g);
+    }
 }
 
 void __go_check_store(void* p, go_grade_t g, size_t n) {
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
         go_trap("bounds", "OOB store", p, g);
+    }
+    if (g.perms != 0 && !(g.perms & 2)) {
+        go_trap("perms", "Write permission denied", p, g);
     }
 }
 
@@ -82,47 +88,48 @@ go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale) {
     return g;
 }
 
+go_grade_t __go_get_top_grade(void) {
+    go_grade_t g = {0};
+    g.end = -1ULL;
+    g.perms = 0xF;
+    return g;
+}
+
 go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2) {
     if (g1.base == g2.base && g1.end == g2.end) return g1;
-    go_grade_t g_top = {0};
-    g_top.end = -1ULL;
-    g_top.perms = 0xF;
-    return g_top;
+    return __go_get_top_grade();
 }
 
-// Improved Shadow metadata (hybrid) - Open addressing with linear probing
-#define SHADOW_CAP (1 << 20)
-static struct { void* addr; go_grade_t g; } shadow_map[SHADOW_CAP];
-
-void __go_shadow_store(void* slot_addr, go_grade_t g) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) { // Limited probing
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == NULL || shadow_map[idx].addr == slot_addr) {
-            shadow_map[idx].addr = slot_addr;
-            shadow_map[idx].g = g;
-            return;
-        }
-    }
-    // Fallback: overwrite first slot if full
-    shadow_map[h].addr = slot_addr;
-    shadow_map[h].g = g;
+// Provenance policy
+void __go_prov_expose(const void* p, go_grade_t g) {
+    // In a full PNVI-ae implementation, this would mark the allocation as "exposed".
+    __go_trace_event(GO_EVENT_PROV_EXPOSE, p, g, "prov", "ptrtoint exposure", dummy_site);
 }
 
-go_grade_t __go_shadow_load(void* slot_addr) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) {
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == slot_addr) return shadow_map[idx].g;
-        if (shadow_map[idx].addr == NULL) break;
-    }
-    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
-    return g_top;
+go_grade_t __go_inttoptr_resolve(uint64_t addr, uint32_t policy) {
+    // Basic resolution: if it looks like a known allocation, we could try to find it.
+    // For MVP, we return TOP or trace the resolution attempt.
+    go_grade_t g = __go_get_top_grade();
+    __go_trace_event(GO_EVENT_INTTOPTR_RESOLVE, (void*)(uintptr_t)addr, g, "prov", "inttoptr resolution", dummy_site);
+    return g;
 }
+
 
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind) {
     __go_check_store(dst, gdst, n);
     __go_check_load(src, gsrc, n);
     memcpy(dst, src, n);
+}
+
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind) {
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+    memmove(dst, src, n);
+}
+
+void __go_memset(void* dst, go_grade_t gdst, int c, size_t n) {
+    __go_check_store(dst, gdst, n);
+    memset(dst, c, n);
 }

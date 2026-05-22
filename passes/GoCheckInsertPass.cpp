@@ -29,10 +29,22 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckLoadFn = M.getOrInsertFunction("llvm.go.check_load", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckStoreFn = M.getOrInsertFunction("llvm.go.check_store", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ShadowStoreFn = M.getOrInsertFunction("llvm.go.shadow_store", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ShadowLoadFn = M.getOrInsertFunction("llvm.go.shadow_load", GradeTy, PtrTy);
+    ProvExposeFn = M.getOrInsertFunction("llvm.go.prov_expose", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    IntToPtrResolveFn = M.getOrInsertFunction("llvm.go.inttoptr_resolve", GradeTy, Type::getInt64Ty(Ctx), Type::getInt32Ty(Ctx));
 }
 
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
     ensureTypes(M);
+    int Tier = 0;
+    if (auto *F = M.getModuleFlag("go-tier")) {
+        Tier = mdconst::extract<ConstantInt>(F)->getZExtValue();
+    }
+    int ProvPolicy = 0;
+    if (auto *F = M.getModuleFlag("go-prov-policy")) {
+        ProvPolicy = mdconst::extract<ConstantInt>(F)->getZExtValue();
+    }
 
     for (Function &F : M) {
         for (BasicBlock &BB : F) {
@@ -54,11 +66,20 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                         uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
                         Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
                     }
+                    if (Tier == 1 && LI->getType()->isPointerTy()) {
+                        Value *GLoaded = Builder.CreateCall(ShadowLoadFn, {Ptr}, "g_loaded");
+                        LI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(GLoaded)));
+                    }
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
                     if (Value *G = getGrade(Ptr)) {
                         uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
                         Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+                    }
+                    if (Tier == 1 && SI->getValueOperand()->getType()->isPointerTy()) {
+                        if (Value *GStore = getGrade(SI->getValueOperand())) {
+                            Builder.CreateCall(ShadowStoreFn, {Ptr, GStore});
+                        }
                     }
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
@@ -68,6 +89,13 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                             Builder.CreateCall(CheckFreeFn, {Ptr, G});
                         }
                     }
+                } else if (auto *PTI = dyn_cast<PtrToIntInst>(&I)) {
+                    if (Value *G = getGrade(PTI->getPointerOperand())) {
+                        Builder.CreateCall(ProvExposeFn, {PTI->getPointerOperand(), G});
+                    }
+                } else if (auto *ITP = dyn_cast<IntToPtrInst>(&I)) {
+                    Value *G = Builder.CreateCall(IntToPtrResolveFn, {ITP->getOperand(0), Builder.getInt32(ProvPolicy)}, "g_resolved");
+                    ITP->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(G)));
                 }
             }
         }
