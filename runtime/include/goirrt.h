@@ -36,9 +36,11 @@ void __go_check_load(const void* p, go_grade_t g, size_t n);
 void __go_check_store(void* p, go_grade_t g, size_t n);
 void __go_check_free(void* p, go_grade_t g);
 
+// TOP grade
+go_grade_t __go_get_top_grade();
+
 // Shadow metadata (hybrid)
-void __go_shadow_store(void* slot_addr, go_grade_t g);
-go_grade_t __go_shadow_load(void* slot_addr);
+#include "go_shadow.h"
 
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
