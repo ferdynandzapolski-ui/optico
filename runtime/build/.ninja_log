@@ -1,0 +1,8 @@
+# ninja log v5
+2	319	1779939440933329900	CMakeFiles/goirrt.dir/src/go_trace.o	a31f60dd289e61e1
+2	349	1779939440961329899	CMakeFiles/goirrt.dir/src/go_shadow.o	4683c443fe0c32c3
+2	351	1779939440961329899	CMakeFiles/test_shadow.dir/tests/test_shadow.o	c99addc6c9bf55d9
+1	356	1779939440969329899	CMakeFiles/goirrt.dir/goir_runtime.o	5a467e4f5855bf8d
+2	56	1779939468681329587	CMakeFiles/goirrt.dir/goir_runtime.o	5a467e4f5855bf8d
+56	90	1779939468717329587	libgoirrt.so	9de81f50414b9f13
+90	173	1779939468797329586	test_shadow	348ac30527dba9cb
