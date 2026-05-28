@@ -1,0 +1,4 @@
+/app/runtime/build/CMakeFiles/goirrt.dir
+/app/runtime/build/CMakeFiles/test_shadow.dir
+/app/runtime/build/CMakeFiles/edit_cache.dir
+/app/runtime/build/CMakeFiles/rebuild_cache.dir
