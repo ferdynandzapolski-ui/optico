@@ -5,6 +5,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/DiagnosticInfo.h"
 
 using namespace llvm;
 
@@ -31,6 +32,24 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
 }
 
+Value* GoCheckInsertPass::getTOP(Module &M, IRBuilder<> &Builder) {
+    LLVMContext &Ctx = M.getContext();
+    return ConstantStruct::get(cast<StructType>(GradeTy), {
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+    });
+}
+
+void GoCheckInsertPass::emitRemark(Instruction *I, StringRef Message) {
+    I->getContext().diagnose(OptimizationRemark("go-check-insert", "Remark", I->getDebugLoc(), I->getParent()) << Message);
+}
+
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
     ensureTypes(M);
 
@@ -39,33 +58,47 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
             for (Instruction &I : llvm::make_early_inc_range(BB)) {
                 IRBuilder<> Builder(&I);
 
-                auto getGrade = [&](Value *Ptr) -> Value* {
+                auto getGradeOrTOP = [&](Value *Ptr, Instruction *Site) -> Value* {
                     if (auto *Inst = dyn_cast<Instruction>(Ptr)) {
                         if (auto *MD = Inst->getMetadata("go.grade")) {
                             return cast<ValueAsMetadata>(cast<MDNode>(MD)->getOperand(0))->getValue();
                         }
                     }
-                    return nullptr;
+                    emitRemark(Site, "Missing grade; synthesizing TOP");
+                    return getTOP(M, Builder);
                 };
 
                 if (auto *LI = dyn_cast<LoadInst>(&I)) {
                     Value *Ptr = LI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
-                        Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGradeOrTOP(Ptr, LI);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
+                    Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
-                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGradeOrTOP(Ptr, SI);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
+                    Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
-                    if (Callee && Callee->getName() == "free") {
-                        Value *Ptr = CI->getArgOperand(0);
-                        if (Value *G = getGrade(Ptr)) {
+                    if (Callee) {
+                        if (Callee->getName() == "free") {
+                            Value *Ptr = CI->getArgOperand(0);
+                            Value *G = getGradeOrTOP(Ptr, CI);
                             Builder.CreateCall(CheckFreeFn, {Ptr, G});
+                        } else if (Callee->getName().starts_with("llvm.memcpy") ||
+                                   Callee->getName().starts_with("llvm.memmove")) {
+                            Value *Dst = CI->getArgOperand(0);
+                            Value *Src = CI->getArgOperand(1);
+                            Value *Len = CI->getArgOperand(2);
+                            Value *GDst = getGradeOrTOP(Dst, CI);
+                            Value *GSrc = getGradeOrTOP(Src, CI);
+                            Builder.CreateCall(CheckStoreFn, {Dst, GDst, Len});
+                            Builder.CreateCall(CheckLoadFn, {Src, GSrc, Len});
+                        } else if (Callee->getName().starts_with("llvm.memset")) {
+                            Value *Dst = CI->getArgOperand(0);
+                            Value *Len = CI->getArgOperand(2);
+                            Value *GDst = getGradeOrTOP(Dst, CI);
+                            Builder.CreateCall(CheckStoreFn, {Dst, GDst, Len});
                         }
                     }
                 }
