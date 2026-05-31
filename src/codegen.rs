@@ -190,10 +190,12 @@ impl CodeGenerator {
                     String::new()
                 }
             }
-            Expr::FieldAssign(base, value) => {
+            Expr::FieldAssign(base, field, value) => {
                 let (base_code, base_ptr) = self.gen_expr_value(base, indent);
                 let (value_code, value_val) = self.gen_expr_value(value, indent);
-                format!("{}{}  store i32 {}, i32* %{}\n", indent_str, value_code, value_val, base_ptr)
+                // Placeholder: For a real compiler, we would need the struct type to calculate the field offset.
+                // For now, we'll just emit a comment with the field name.
+                format!("{}{}  ; Field assignment to {}\n  store i32 {}, i32* %{}\n", indent_str, value_code, field, value_val, base_ptr)
             }
             Expr::IndexAssign(base, index, value) => {
                 // For index assignment: base[index] = value

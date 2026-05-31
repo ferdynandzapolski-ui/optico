@@ -84,9 +84,9 @@ The standard library (`std/`) must provide the base implementations for these no
 
 The following components have been implemented in the self-hosted standard library to support the bootstrap process:
 
-- **Lexer (`std/compiler/lexer.oco`):** Full keyword support for OptiCo v0.3, including `PerfGrade`, `extern "C"`, and coinductive `rec optic`. Supports character and string literals with escape sequences.
-- **Parser (`std/compiler/parser.oco`):** Implements `parser_parse_program` as the entry point. Supports `extern "C"` blocks, nested struct/protocol declarations, and standard expression precedence (additive/multiplicative).
-- **IR Core (`std/ir/`):** Implements `NodeSession` protocol transitions (`resolve`, `typecheck`, `lower`). Includes `SymbolTable` management for scope resolution.
+- **Lexer (`std/compiler/lexer.oco`):** Full keyword support for OptiCo v0.3, including `PerfGrade`, `extern "C"`, and coinductive `rec optic`. Supports character and string literals with escape sequences. The Rust-based bootstrap compiler now supports `||` (logical OR) and `|` (composition).
+- **Parser (`std/compiler/parser.oco`):** Implements `parser_parse_program` as the entry point. Supports `extern "C"` blocks, nested struct/protocol declarations, and standard expression precedence (additive/multiplicative/logical). The bootstrap compiler now implements a robust assignment hierarchy for `=`, `.`, and `[]`.
+- **IR Core (`std/ir/`):** Implements `NodeSession` protocol transitions (`resolve`, `typecheck`, `lower`). Includes `SymbolTable` management for scope resolution. Semantic analysis handles all standard library constructs, including cumulative module dependencies.
 - **Standard Library:** Core data structures (`String`, `Vector`, `PtrVector`, `List`, `Map`) and I/O abstractions (`File`, `Console`) are fully defined and compatible with the Rust-based bootstrap compiler.
 
 ### Issues Encountered & Resolved
