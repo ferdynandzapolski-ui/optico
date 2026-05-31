@@ -279,8 +279,30 @@ impl Sema {
                 }
                 return Type::Void;
             }
-            Expr::FieldAssign(base, value) => {
+            Expr::FieldAssign(base, field, value) => {
+                let base_ty = self.check_expr(base, env, res_consumed, local_resources);
+                let _value_ty = self.check_expr(value, env, res_consumed, local_resources);
+
+                let mut ty = base_ty;
+                while let Type::Optic(inner, _, _, _) | Type::RecOptic(inner, _, _, _) | Type::AtomicOptic(inner, _, _, _) | Type::Traversal(inner, _, _, _) | Type::Co(inner, _, _) = ty {
+                    ty = (*inner).clone();
+                }
+
+                match ty {
+                    Type::Named(name) => {
+                        let fields = self.structs.get(&name).expect(&format!("Undefined struct {}", name));
+                        fields.iter().find(|(f, _)| f == field).expect(&format!("Field {} not found in struct {}", field, name));
+                    }
+                    Type::Struct(fields) => {
+                        fields.iter().find(|(f, _)| f == field).expect(&format!("Field {} not found in anonymous struct", field));
+                    }
+                    _ => panic!("Field assignment requires struct type, found {:?}", ty),
+                }
+                Type::Void
+            }
+            Expr::IndexAssign(base, index, value) => {
                 self.check_expr(base, env, res_consumed, local_resources);
+                self.check_expr(index, env, res_consumed, local_resources);
                 self.check_expr(value, env, res_consumed, local_resources);
                 Type::Void
             }
@@ -609,8 +631,8 @@ impl Sema {
                         if ty1 == Type::Int && ty2 == Type::Int { Type::Int } else { Type::Float }
                     }
                     BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt | BinOpKind::Le | BinOpKind::Ge => { Type::Bool }
-                    BinOpKind::And => {
-                        if ty1 == Type::Bool && ty2 == Type::Bool { Type::Bool } else { panic!("And operands must be bool") }
+                    BinOpKind::And | BinOpKind::Or => {
+                        if ty1 == Type::Bool && ty2 == Type::Bool { Type::Bool } else { panic!("Logical operator operands must be bool") }
                     }
                 }
             }

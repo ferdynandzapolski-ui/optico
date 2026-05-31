@@ -29,7 +29,7 @@ pub enum Type {
 pub enum BinOpKind {
     Add, Sub, Mul, Div,
     Eq, Ne, Lt, Gt, Le, Ge,
-    And,
+    And, Or,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,7 +61,7 @@ pub enum Expr {
     Paren(Box<Expr>),          // (e)
     LocalDecl(String, Type, Box<Expr>), // τ x = e
     Assign(String, Box<Expr>), // x = e
-    FieldAssign(Box<Expr>, Box<Expr>), // x.field = e
+    FieldAssign(Box<Expr>, String, Box<Expr>), // x.field = e
     IndexAssign(Box<Expr>, Box<Expr>, Box<Expr>), // x[e] = value (base, index, value)
     Return(Box<Expr>),
 }

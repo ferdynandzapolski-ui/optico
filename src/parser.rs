@@ -476,23 +476,65 @@ impl<'a> Parser<'a> {
             return Expr::While(Box::new(cond), Box::new(body));
         }
 
-        self.parse_put_expr()
+        self.parse_assignment_expr()
+    }
+
+    fn parse_assignment_expr(&mut self) -> Expr {
+        let e = self.parse_put_expr();
+        if self.current_token == Token::Assign {
+            self.advance();
+            let value = self.parse_expr();
+            match e {
+                Expr::Var(n) => Expr::Assign(n, Box::new(value)),
+                Expr::Access(base, field) => Expr::FieldAssign(base, field, Box::new(value)),
+                Expr::Index(base, index) => Expr::IndexAssign(base, index, Box::new(value)),
+                _ => panic!("Invalid left-hand side of assignment"),
+            }
+        } else {
+            e
+        }
     }
 
     fn parse_put_expr(&mut self) -> Expr {
-        let mut e = self.parse_logical_expr();
+        let mut e = self.parse_logical_or_expr();
         loop {
             match &self.current_token {
                 Token::Pipe => {
                     self.advance();
-                    e = Expr::Compose(Box::new(e), Box::new(self.parse_logical_expr()));
+                    e = Expr::Compose(Box::new(e), Box::new(self.parse_logical_or_expr()));
                 }
                 Token::Put => {
                     self.advance();
-                    e = Expr::Put(Box::new(e), Box::new(self.parse_logical_expr()));
+                    e = Expr::Put(Box::new(e), Box::new(self.parse_logical_or_expr()));
                 }
                 _ => break,
             }
+        }
+        e
+    }
+
+    fn parse_logical_or_expr(&mut self) -> Expr {
+        let mut e = self.parse_logical_and_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::OrOr => BinOpKind::Or,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_logical_and_expr()));
+        }
+        e
+    }
+
+    fn parse_logical_and_expr(&mut self) -> Expr {
+        let mut e = self.parse_comparison_expr();
+        loop {
+            let kind = match &self.current_token {
+                Token::AndAnd => BinOpKind::And,
+                _ => break,
+            };
+            self.advance();
+            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_comparison_expr()));
         }
         e
     }
@@ -511,19 +553,6 @@ impl<'a> Parser<'a> {
             };
             self.advance();
             e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_additive_expr()));
-        }
-        e
-    }
-
-    fn parse_logical_expr(&mut self) -> Expr {
-        let mut e = self.parse_comparison_expr();
-        loop {
-            let kind = match &self.current_token {
-                Token::AndAnd => BinOpKind::And,
-                _ => break,
-            };
-            self.advance();
-            e = Expr::BinOp(kind, Box::new(e), Box::new(self.parse_comparison_expr()));
         }
         e
     }
@@ -583,6 +612,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary_expr(&mut self) -> Expr {
+        if self.current_token == Token::Minus {
+            self.advance();
+            let e = self.parse_primary_expr();
+            return Expr::BinOp(BinOpKind::Sub, Box::new(Expr::ConstInt(0)), Box::new(e));
+        }
+
         match &self.current_token {
             Token::LParen => {
                 self.advance();
@@ -631,7 +666,7 @@ impl<'a> Parser<'a> {
             Token::Alloc => {
                 self.advance();
                 self.expect(Token::Lt);
-                let _ty = self.parse_type();
+                let ty = self.parse_type();
                 let mut dur = None;
                 if self.current_token == Token::Comma {
                     self.advance();
@@ -666,7 +701,7 @@ impl<'a> Parser<'a> {
                 } else {
                     panic!("Expected RParen or RBrace, found {:?}", self.current_token);
                 }
-                Expr::Alloc(_ty, args, dur)
+                Expr::Alloc(ty, args, dur)
             }
             Token::Free => {
                 self.advance();
@@ -704,7 +739,7 @@ impl<'a> Parser<'a> {
             }
             Token::ResourceKw => {
                 self.advance();
-                let _ty = self.parse_type();
+                let ty = self.parse_type();
                 let name = match &self.current_token {
                     Token::Ident(n) => n.clone(),
                     _ => panic!("Expected resource name"),
@@ -748,6 +783,8 @@ impl<'a> Parser<'a> {
                             self.advance();
                             let val = self.parse_expr();
                             Expr::LocalDecl(name, ty, Box::new(val))
+                        } else if self.current_token == Token::Semi || self.current_token == Token::RParen || self.current_token == Token::RBrace || self.current_token == Token::Comma {
+                            Expr::LocalDecl(name, ty, Box::new(Expr::ConstInt(0))) // Default initialization
                         } else {
                             Expr::Var(name)
                         }
@@ -783,16 +820,15 @@ impl<'a> Parser<'a> {
                         self.advance();
                         let val = self.parse_expr();
                         Expr::LocalDecl(name, ty, Box::new(val))
+                    } else if self.current_token == Token::Semi || self.current_token == Token::RParen || self.current_token == Token::RBrace || self.current_token == Token::Comma {
+                        Expr::LocalDecl(name, ty, Box::new(Expr::ConstInt(0))) // Default initialization
                     } else {
                         Expr::Var(name)
                     }
                 } else {
                     let name = n.clone();
                     self.advance();
-                    if self.current_token == Token::Assign {
-                        self.advance();
-                        Expr::Assign(name, Box::new(self.parse_expr()))
-                    } else if self.current_token == Token::LParen || self.current_token == Token::LBrace || (self.current_token == Token::Lt && {
+                    if self.current_token == Token::LParen || self.current_token == Token::LBrace || (self.current_token == Token::Lt && {
                         let mut temp_lex = self.lexer.clone();
                         matches!(temp_lex.next_token(), Token::Ident(_)) &&
                         matches!(temp_lex.next_token(), Token::Gt) &&
