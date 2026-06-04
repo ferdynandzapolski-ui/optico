@@ -13,6 +13,8 @@ struct GoCheckInsertPass : public PassInfoMixin<GoCheckInsertPass> {
     FunctionCallee CheckFreeFn = nullptr;
 
     void ensureTypes(Module &M);
+    Value* getTOP(Module &M, IRBuilder<> &Builder);
+    void emitRemark(Instruction *I, StringRef Message);
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
