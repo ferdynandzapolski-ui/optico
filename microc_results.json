@@ -10,14 +10,14 @@
     "name": "bounds_array_index.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing arr[10]...\nValue: 1660154314\n",
+    "stdout": "Accessing arr[10]...\nValue: 1488306634\n",
     "stderr": ""
   },
   {
     "name": "bounds_basic_oob_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Reading arr[5] (OOB)...\nValue: 32765\n",
+    "stdout": "Reading arr[5] (OOB)...\nValue: 32764\n",
     "stderr": ""
   },
   {
@@ -66,7 +66,7 @@
     "name": "bounds_one_past_end.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Pointer at one-past-the-end: 0x7ffc12ef66b4\nAttempting to dereference one-past-the-end...\nValue: 32764\n",
+    "stdout": "Pointer at one-past-the-end: 0x7ffc7c6303f4\nAttempting to dereference one-past-the-end...\nValue: 32764\n",
     "stderr": ""
   },
   {
@@ -101,7 +101,7 @@
     "name": "lifetime_realloc_uaf.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Original p: 0x560f11ef62a0\nNew q: 0x560f11ef72e0\nAccessing old p after realloc (UAF)...\nValue: 1626414838\n",
+    "stdout": "Original p: 0x564e6d6362a0\nNew q: 0x564e6d6372e0\nAccessing old p after realloc (UAF)...\nValue: 1692849718\n",
     "stderr": ""
   },
   {
@@ -122,14 +122,14 @@
     "name": "lifetime_stack_escape.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing stack pointer after function return...\nValue: 32673\n",
+    "stdout": "Accessing stack pointer after function return...\nValue: 32654\n",
     "stderr": ""
   },
   {
     "name": "lifetime_uaf_alias.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1661871153\n",
+    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1652882175\n",
     "stderr": ""
   },
   {
@@ -143,7 +143,7 @@
     "name": "lifetime_uaf_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing p after free (UAF)...\nValue: 1635865645\n",
+    "stdout": "Accessing p after free (UAF)...\nValue: 1516408791\n",
     "stderr": ""
   },
   {
@@ -152,6 +152,13 @@
     "exit_code": 0,
     "stdout": "Writing p after free (UAF)...\nWrite completed\n",
     "stderr": ""
+  },
+  {
+    "name": "manual_oob_check.c",
+    "status": "TRAP",
+    "exit_code": -6,
+    "stdout": "",
+    "stderr": "{\"ts\": 1780544919, \"tier\": \"diag\", \"event\": \"init\", \"ptr\": \"0x55fe2a15c2a0\", \"grade\": {\"base\": \"0x55fe2a15c2a0\", \"end\": \"0x55fe2a15c2b4\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"none\", \"detail\": \"malloc\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\nGOIR TRAP: bounds - OOB load at 0x55fe2a15c2b4\n{\"ts\": 1780544919, \"tier\": \"diag\", \"event\": \"check_fail\", \"ptr\": \"0x55fe2a15c2b4\", \"grade\": {\"base\": \"0x55fe2a15c2a0\", \"end\": \"0x55fe2a15c2b4\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"bounds\", \"detail\": \"OOB load\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\n"
   },
   {
     "name": "memcpy_oob_dst.c",
@@ -220,7 +227,7 @@
     "name": "prov_ptr_int_roundtrip.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Roundtrip p -> i -> q: 0x7ffe805afb28 == 0x7ffe805afb28\nSuccess\n",
+    "stdout": "Roundtrip p -> i -> q: 0x7ffd9513b7c8 == 0x7ffd9513b7c8\nSuccess\n",
     "stderr": ""
   },
   {
@@ -235,6 +242,6 @@
     "status": "TRAP",
     "exit_code": -6,
     "stdout": "",
-    "stderr": "{\"ts\": 1776483721, \"tier\": \"diag\", \"event\": \"init\", \"ptr\": \"0x55dcf36e32a0\", \"grade\": {\"base\": \"0x55dcf36e32a0\", \"end\": \"0x55dcf36e32c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"none\", \"detail\": \"malloc\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\nGOIR TRAP: bounds - OOB load at 0x55dcf36e32c8\n{\"ts\": 1776483721, \"tier\": \"diag\", \"event\": \"check_fail\", \"ptr\": \"0x55dcf36e32c8\", \"grade\": {\"base\": \"0x55dcf36e32a0\", \"end\": \"0x55dcf36e32c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"bounds\", \"detail\": \"OOB load\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\n"
+    "stderr": "{\"ts\": 1780544920, \"tier\": \"diag\", \"event\": \"init\", \"ptr\": \"0x55c2fb39e2a0\", \"grade\": {\"base\": \"0x55c2fb39e2a0\", \"end\": \"0x55c2fb39e2c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"none\", \"detail\": \"malloc\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\nGOIR TRAP: bounds - OOB load at 0x55c2fb39e2c8\n{\"ts\": 1780544920, \"tier\": \"diag\", \"event\": \"check_fail\", \"ptr\": \"0x55c2fb39e2c8\", \"grade\": {\"base\": \"0x55c2fb39e2a0\", \"end\": \"0x55c2fb39e2c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"bounds\", \"detail\": \"OOB load\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\n"
   }
 ]
