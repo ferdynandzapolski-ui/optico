@@ -1,0 +1,5 @@
+-3.303170e-02 go-init/basic.ll
+-3.277779e-02 go-init/remarks.ll
+-3.242898e-02 go-propagate/gep.ll
+-2.918005e-02 go-propagate/phi.ll
+-5.441904e-03 smoke.ll
