@@ -40,9 +40,12 @@ void __go_check_free(void* p, go_grade_t g);
 void __go_shadow_store(void* slot_addr, go_grade_t g);
 go_grade_t __go_shadow_load(void* slot_addr);
 
-// memcpy policy
+// memory intrinsic stubs
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind);
+void __go_memset(void* dst, go_grade_t gdst, int v, size_t n);
 
 #ifdef __cplusplus
 }

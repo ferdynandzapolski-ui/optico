@@ -120,9 +120,3 @@ go_grade_t __go_shadow_load(void* slot_addr) {
     return g_top;
 }
 
-void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
-                 size_t n, uint32_t layout_kind) {
-    __go_check_store(dst, gdst, n);
-    __go_check_load(src, gsrc, n);
-    memcpy(dst, src, n);
-}
