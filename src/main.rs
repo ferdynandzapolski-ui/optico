@@ -12,22 +12,28 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut policy = "0"; // PNVI-plain
     let mut debug_ast = false;
 
-    for arg in args.iter().skip(1) {
+    let mut i = 1;
+    while i < args.len() {
+        let arg = &args[i];
         if arg == "--debug-ast" {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
-            input_files.push(arg);
+            input_files.push(arg.clone());
         }
+        i += 1;
     }
 
     if input_files.is_empty() {
-        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>]");
+        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>] [--goir-provenance-policy=<0|1>]");
         return;
     }
 
@@ -69,14 +75,27 @@ fn main() {
 
     if llvm_path.exists() {
         println!("\n--- Driving GOIR Compilation Pipeline ---");
-        let goir_passes = "go-init,go-propagate,go-check-insert,go-mem-intrinsic,go-lower";
+
+        let tier_val = match tier {
+            "diag" => 0,
+            "hybrid" => 1,
+            "cap" => 2,
+            _ => 0,
+        };
+
+        let goir_passes = format!("go-init,go-propagate,go-check-insert,go-mem-intrinsic,go-lower");
         let output_ll = Path::new(filepath).with_extension("goir.ll");
         let output_obj = Path::new(filepath).with_extension("o");
         let output_bin = Path::new(filepath).with_extension("bin");
 
         // 1. Run opt with GOIR passes
+        // We pass tier and policy via cl::opts for GoInitPass and others.
+
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
+             .arg(format!("-go-tier={}", tier_val))
+             .arg(format!("-go-check-tier={}", tier_val))
+             .arg(format!("-go-prov-policy={}", policy))
              .arg(format!("-passes={}", goir_passes))
              .arg("-S")
              .arg(&llvm_path)
