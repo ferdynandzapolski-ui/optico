@@ -1,0 +1,11 @@
+extern C {
+    pointer<i8, Heap> malloc(int size);
+    void free(pointer<i8, Heap> ptr);
+}
+
+void main() {
+    {
+        pointer<i8, Heap> p = malloc(10);
+        free(p);
+    }
+}
