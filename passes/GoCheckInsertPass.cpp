@@ -29,6 +29,9 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckLoadFn = M.getOrInsertFunction("llvm.go.check_load", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckStoreFn = M.getOrInsertFunction("llvm.go.check_store", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+
+    ProvExposeFn = M.getOrInsertFunction("llvm.go.prov_expose", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    IntToPtrResolveFn = M.getOrInsertFunction("llvm.go.inttoptr_resolve", StructType::get(Ctx, {PtrTy, GradeTy}), SizeTy);
 }
 
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -68,6 +71,22 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                             Builder.CreateCall(CheckFreeFn, {Ptr, G});
                         }
                     }
+                } else if (auto *PTI = dyn_cast<PtrToIntInst>(&I)) {
+                    Value *Ptr = PTI->getPointerOperand();
+                    if (Value *G = getGrade(Ptr)) {
+                        Builder.CreateCall(ProvExposeFn, {Ptr, G});
+                    }
+                } else if (auto *ITP = dyn_cast<IntToPtrInst>(&I)) {
+                    Value *IntVal = ITP->getOperand(0);
+                    CallInst *ResolveCall = Builder.CreateCall(IntToPtrResolveFn, {IntVal});
+                    Value *NewPtr = Builder.CreateExtractValue(ResolveCall, {0}, "ptr_res");
+                    Value *NewGrade = Builder.CreateExtractValue(ResolveCall, {1}, "g_res");
+
+                    ITP->replaceAllUsesWith(NewPtr);
+                    if (auto *NewPtrInst = dyn_cast<Instruction>(NewPtr)) {
+                        NewPtrInst->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(NewGrade)));
+                    }
+                    I.eraseFromParent();
                 }
             }
         }
