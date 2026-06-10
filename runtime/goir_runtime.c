@@ -1,5 +1,6 @@
 #include "goirrt.h"
 #include "go_trace.h"
+#include "go_metrics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,30 +8,40 @@
 static go_site_t dummy_site = {"unknown", 0, "unknown"};
 
 static void go_trap(const char* cause, const char* detail, const void* p, go_grade_t g) {
+    if (strcmp(cause, "bounds") == 0) __go_metrics_inc(GO_METRIC_TRAP_BOUNDS);
+    else if (strcmp(cause, "life") == 0) __go_metrics_inc(GO_METRIC_TRAP_LIFE);
+    else if (strcmp(cause, "perms") == 0) __go_metrics_inc(GO_METRIC_TRAP_PERMS);
+    else if (strcmp(cause, "prov") == 0) __go_metrics_inc(GO_METRIC_TRAP_PROV);
+
     fprintf(stderr, "GOIR TRAP: %s - %s at %p\n", cause, detail, p);
     __go_trace_event(GO_EVENT_CHECK_FAIL, p, g, cause, detail, dummy_site);
+    __go_metrics_dump();
     abort();
 }
 
 void __go_check_load(const void* p, go_grade_t g, size_t n) {
+    __go_metrics_inc(GO_METRIC_CHECK_LOAD);
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
         go_trap("bounds", "OOB load", p, g);
     }
 }
 
 void __go_check_store(void* p, go_grade_t g, size_t n) {
+    __go_metrics_inc(GO_METRIC_CHECK_STORE);
     if ((uint64_t)p < g.base || (uint64_t)p + n > g.end) {
         go_trap("bounds", "OOB store", p, g);
     }
 }
 
 void __go_check_free(void* p, go_grade_t g) {
+    __go_metrics_inc(GO_METRIC_CHECK_FREE);
     if ((uint64_t)p != g.base) {
         go_trap("bounds", "invalid free (not base)", p, g);
     }
 }
 
 void* __go_malloc(size_t n, go_grade_t* out_g) {
+    __go_metrics_inc(GO_METRIC_ALLOC);
     void* p = malloc(n);
     go_grade_t g = {0};
     if (p) {
@@ -49,6 +60,7 @@ void __go_free(void* p, go_grade_t g) {
 }
 
 void* __go_realloc(void* p, size_t n, go_grade_t* out_g) {
+    __go_metrics_inc(GO_METRIC_ALLOC);
     void* new_p = realloc(p, n);
     go_grade_t g = {0};
     if (new_p) {
@@ -90,35 +102,7 @@ go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2) {
     return g_top;
 }
 
-// Improved Shadow metadata (hybrid) - Open addressing with linear probing
-#define SHADOW_CAP (1 << 20)
-static struct { void* addr; go_grade_t g; } shadow_map[SHADOW_CAP];
-
-void __go_shadow_store(void* slot_addr, go_grade_t g) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) { // Limited probing
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == NULL || shadow_map[idx].addr == slot_addr) {
-            shadow_map[idx].addr = slot_addr;
-            shadow_map[idx].g = g;
-            return;
-        }
-    }
-    // Fallback: overwrite first slot if full
-    shadow_map[h].addr = slot_addr;
-    shadow_map[h].g = g;
-}
-
-go_grade_t __go_shadow_load(void* slot_addr) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) {
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == slot_addr) return shadow_map[idx].g;
-        if (shadow_map[idx].addr == NULL) break;
-    }
-    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
-    return g_top;
-}
+#include "go_shadow.h"
 
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind) {
