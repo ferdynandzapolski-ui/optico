@@ -1,0 +1,13 @@
+{
+  "check_load": 0,
+  "check_store": 0,
+  "check_free": 0,
+  "trap_bounds": 0,
+  "trap_life": 0,
+  "trap_perms": 0,
+  "trap_prov": 0,
+  "shadow_store": 3,
+  "shadow_load": 4,
+  "alloc": 0,
+  "missing_grade": 0
+}

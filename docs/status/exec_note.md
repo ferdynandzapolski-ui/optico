@@ -37,17 +37,17 @@ This section establishes the topological execution order for the GOIR project ta
 4.  **fnd_repo_scaffold**: Repo scaffolding, build system, toolchain pin strategy. [Status: Completed]
 5.  **fnd_goir_spec**: GOIR specification: syntax, type system, grade algebra, lowering strategy. [Status: Completed]
 6.  **fnd_grade_format**: Grade record layout, serialization, and trace schema. [Status: Completed]
-7.  **diag_clang_flag**: Add -fgraded-optics={diag,hybrid,cap} flag plumbing and module markers.
-8.  **diag_intrinsics_or_abi**: Define llvm.go.* intrinsics or stable runtime call ABI.
-9.  **diag_runtime_skeleton**: Implement libgoirrt (diag tier): checks, traps, minimal alloc wrappers, trace hooks.
-10. **fnd_microbench_suite**: C/LLVM microtests suite for bounds, lifetime, provenance, memcpy, alias edge cases.
-11. **diag_go_init_pass_template**: Template A: Implement GoInitPass.
-12. **diag_trace_tooling**: Trace logging + minimal viewer (JSONL).
+7.  **diag_clang_flag**: Add -fgraded-optics={diag,hybrid,cap} flag plumbing and module markers. [Status: Completed]
+8.  **diag_intrinsics_or_abi**: Define llvm.go.* intrinsics or stable runtime call ABI. [Status: Completed]
+9.  **diag_runtime_skeleton**: Implement libgoirrt (diag tier): checks, traps, minimal alloc wrappers, trace hooks. [Status: Completed]
+10. **fnd_microbench_suite**: C/LLVM microtests suite for bounds, lifetime, provenance, memcpy, alias edge cases. [Status: Completed]
+11. **diag_go_init_pass_template**: Template A: Implement GoInitPass. [Status: Completed]
+12. **diag_trace_tooling**: Trace logging + minimal viewer (JSONL). [Status: Completed]
 13. **hyb_shadow_design**: Disjoint metadata (shadow) design for pointer grades in memory.
 14. **eval_metrics_collector**: Unified metrics collection.
-15. **fnd_core_calculus_refmodel**: Core calculus + executable refmodel.
-16. **fnd_law_templates**: Formal lifting laws and invariants checklist.
-17. **diag_go_propagate_pass_template**: Template B: Implement GoPropagatePass.
+15. **fnd_core_calculus_refmodel**: Core calculus + executable refmodel. [Status: Completed]
+16. **fnd_law_templates**: Formal lifting laws and invariants checklist. [Status: Completed]
+17. **diag_go_propagate_pass_template**: Template B: Implement GoPropagatePass. [Status: Completed]
 18. **diag_go_check_insert_pass_template**: Template C: Implement GoCheckInsertPass.
 19. **diag_mem_intrinsic_stub**: Stub handling for llvm.memcpy/memmove/memset in diag tier.
 20. **diag_asan_interop**: Define and test interop with AddressSanitizer (ASan) in diag tier.

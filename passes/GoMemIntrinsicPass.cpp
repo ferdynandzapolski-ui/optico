@@ -33,46 +33,74 @@ void GoMemIntrinsicPass::ensureTypes(Module &M) {
 PreservedAnalyses GoMemIntrinsicPass::run(Module &M, ModuleAnalysisManager &AM) {
     ensureTypes(M);
 
+    LLVMContext &Ctx = M.getContext();
+    Type *PtrTy = PointerType::getUnqual(Ctx);
+    Type *SizeTy = Type::getInt64Ty(Ctx);
+    Type *I32Ty = Type::getInt32Ty(Ctx);
+    Type *I8Ty = Type::getInt8Ty(Ctx);
+
+    auto *MemmoveFn = M.getOrInsertFunction("__go_memmove", Type::getVoidTy(Ctx), PtrTy, GradeTy, PtrTy, GradeTy, SizeTy, I32Ty);
+    auto *MemsetFn = M.getOrInsertFunction("__go_memset", Type::getVoidTy(Ctx), PtrTy, GradeTy, I8Ty, SizeTy, I32Ty);
+
+    auto getTOP = [&]() {
+         return ConstantStruct::get(cast<StructType>(GradeTy), {
+             ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+             ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+             ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+             ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+             ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+             ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+             ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+             ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+         });
+    };
+
     for (Function &F : M) {
         for (BasicBlock &BB : F) {
             for (Instruction &I : llvm::make_early_inc_range(BB)) {
                 if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
-                    if (Callee && Callee->getName().starts_with("llvm.memcpy")) {
-                        IRBuilder<> Builder(CI);
+                    if (!Callee) continue;
+
+                    IRBuilder<> Builder(CI);
+                    if (Callee->getName().starts_with("llvm.memcpy")) {
                         Value *Dst = CI->getArgOperand(0);
                         Value *Src = CI->getArgOperand(1);
                         Value *Len = CI->getArgOperand(2);
+                        Value *GDst = getTOP();
+                        Value *GSrc = getTOP();
 
-                        Value *GDst = nullptr;
-                        Value *GSrc = nullptr;
-
-                        if (auto *MDDst = CI->getMetadata("go.grade.dst")) {
+                        if (auto *MDDst = CI->getMetadata("go.grade.dst"))
                             GDst = cast<ValueAsMetadata>(cast<MDNode>(MDDst)->getOperand(0))->getValue();
-                        }
-                        if (auto *MDSrc = CI->getMetadata("go.grade.src")) {
+                        if (auto *MDSrc = CI->getMetadata("go.grade.src"))
                             GSrc = cast<ValueAsMetadata>(cast<MDNode>(MDSrc)->getOperand(0))->getValue();
-                        }
-
-                        // Fallback to TOP if missing (simplification for diag tier)
-                        auto getTOP = [&]() {
-                             LLVMContext &Ctx = M.getContext();
-                             return ConstantStruct::get(cast<StructType>(GradeTy), {
-                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
-                                 ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
-                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
-                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
-                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
-                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0),
-                                 ConstantInt::get(Type::getInt64Ty(Ctx), 0),
-                                 ConstantInt::get(Type::getInt32Ty(Ctx), 0)
-                             });
-                        };
-
-                        if (!GDst) GDst = getTOP();
-                        if (!GSrc) GSrc = getTOP();
 
                         Builder.CreateCall(MemcpyFn, {Dst, GDst, Src, GSrc, Len, Builder.getInt32(0)});
+                        CI->eraseFromParent();
+                    } else if (Callee->getName().starts_with("llvm.memmove")) {
+                        Value *Dst = CI->getArgOperand(0);
+                        Value *Src = CI->getArgOperand(1);
+                        Value *Len = CI->getArgOperand(2);
+                        Value *GDst = getTOP();
+                        Value *GSrc = getTOP();
+
+                        if (auto *MDDst = CI->getMetadata("go.grade.dst"))
+                            GDst = cast<ValueAsMetadata>(cast<MDNode>(MDDst)->getOperand(0))->getValue();
+                        if (auto *MDSrc = CI->getMetadata("go.grade.src"))
+                            GSrc = cast<ValueAsMetadata>(cast<MDNode>(MDSrc)->getOperand(0))->getValue();
+
+                        Builder.CreateCall(MemmoveFn, {Dst, GDst, Src, GSrc, Len, Builder.getInt32(0)});
+                        CI->eraseFromParent();
+                    } else if (Callee->getName().starts_with("llvm.memset")) {
+                        Value *Dst = CI->getArgOperand(0);
+                        Value *Val = CI->getArgOperand(1);
+                        Value *Len = CI->getArgOperand(2);
+                        Value *GDst = getTOP();
+
+                        if (auto *MDDst = CI->getMetadata("go.grade.dst"))
+                            GDst = cast<ValueAsMetadata>(cast<MDNode>(MDDst)->getOperand(0))->getValue();
+
+                        Builder.CreateCall(MemsetFn, {Dst, GDst, Val, Len, Builder.getInt32(0)});
                         CI->eraseFromParent();
                     }
                 }

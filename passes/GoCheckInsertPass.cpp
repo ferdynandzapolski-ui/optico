@@ -5,6 +5,11 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/ADT/Statistic.h"
+
+#define DEBUG_TYPE "go-check-insert"
+STATISTIC(NumMissingGrades, "Number of missing grades for checked pointers");
 
 using namespace llvm;
 
@@ -34,6 +39,24 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
     ensureTypes(M);
 
+    auto getTOP = [&](IRBuilder<> &Builder) {
+        LLVMContext &Ctx = M.getContext();
+        return ConstantStruct::get(cast<StructType>(GradeTy), {
+            ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+            ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+            ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+            ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+            ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+            ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+            ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+            ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+        });
+    };
+
+    auto emitRemark = [&](Instruction *I, StringRef Message) {
+        I->getContext().diagnose(OptimizationRemark(DEBUG_TYPE, "Remark", I->getDebugLoc(), I->getParent()) << Message);
+    };
+
     for (Function &F : M) {
         for (BasicBlock &BB : F) {
             for (Instruction &I : llvm::make_early_inc_range(BB)) {
@@ -45,28 +68,27 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                             return cast<ValueAsMetadata>(cast<MDNode>(MD)->getOperand(0))->getValue();
                         }
                     }
-                    return nullptr;
+                    NumMissingGrades++;
+                    emitRemark(&I, "Missing grade metadata; synthesizing TOP grade");
+                    return getTOP(Builder);
                 };
 
                 if (auto *LI = dyn_cast<LoadInst>(&I)) {
                     Value *Ptr = LI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
-                        Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGrade(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
+                    Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
-                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGrade(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
+                    Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
                     if (Callee && Callee->getName() == "free") {
                         Value *Ptr = CI->getArgOperand(0);
-                        if (Value *G = getGrade(Ptr)) {
-                            Builder.CreateCall(CheckFreeFn, {Ptr, G});
-                        }
+                        Value *G = getGrade(Ptr);
+                        Builder.CreateCall(CheckFreeFn, {Ptr, G});
                     }
                 }
             }
