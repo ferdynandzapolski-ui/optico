@@ -14,7 +14,7 @@ def run_test(test_file, clang_path, rt_lib_path, rt_inc_path):
         clang_path,
         "-I", rt_inc_path,
         test_file,
-        "-L", rt_lib_path,
+        "-L", os.path.dirname(rt_lib_path),
         "-lgoirrt",
         "-o", output_bin
     ]
@@ -28,7 +28,7 @@ def run_test(test_file, clang_path, rt_lib_path, rt_inc_path):
     try:
         # Add runtime lib path to LD_LIBRARY_PATH
         env = os.environ.copy()
-        env["LD_LIBRARY_PATH"] = rt_lib_path + ":" + env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = os.path.dirname(rt_lib_path) + ":" + env.get("LD_LIBRARY_PATH", "")
 
         result = subprocess.run([output_bin], capture_output=True, text=True, env=env, timeout=10)
 
