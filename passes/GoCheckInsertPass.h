@@ -14,6 +14,9 @@ struct GoCheckInsertPass : public PassInfoMixin<GoCheckInsertPass> {
 
     void ensureTypes(Module &M);
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+
+    Value* getTOP(Module &M, IRBuilder<> &Builder);
+    void emitRemark(Instruction *I, StringRef Message);
 };
 
 } // namespace llvm
