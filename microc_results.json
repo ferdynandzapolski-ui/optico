@@ -10,14 +10,14 @@
     "name": "bounds_array_index.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing arr[10]...\nValue: 1660154314\n",
+    "stdout": "Accessing arr[10]...\nValue: -1523437110\n",
     "stderr": ""
   },
   {
     "name": "bounds_basic_oob_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Reading arr[5] (OOB)...\nValue: 32765\n",
+    "stdout": "Reading arr[5] (OOB)...\nValue: 0\n",
     "stderr": ""
   },
   {
@@ -52,7 +52,7 @@
     "name": "bounds_negative_index.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing p[-1]...\nValue: 32767\n",
+    "stdout": "Accessing p[-1]...\nValue: 32765\n",
     "stderr": ""
   },
   {
@@ -66,7 +66,7 @@
     "name": "bounds_one_past_end.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Pointer at one-past-the-end: 0x7ffc12ef66b4\nAttempting to dereference one-past-the-end...\nValue: 32764\n",
+    "stdout": "Pointer at one-past-the-end: 0x7ffcd8732234\nAttempting to dereference one-past-the-end...\nValue: 0\n",
     "stderr": ""
   },
   {
@@ -101,7 +101,7 @@
     "name": "lifetime_realloc_uaf.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Original p: 0x560f11ef62a0\nNew q: 0x560f11ef72e0\nAccessing old p after realloc (UAF)...\nValue: 1626414838\n",
+    "stdout": "Original p: 0x555f7083e2a0\nNew q: 0x555f7083f2e0\nAccessing old p after realloc (UAF)...\nValue: 1442252862\n",
     "stderr": ""
   },
   {
@@ -122,14 +122,14 @@
     "name": "lifetime_stack_escape.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing stack pointer after function return...\nValue: 32673\n",
+    "stdout": "Accessing stack pointer after function return...\nValue: 32588\n",
     "stderr": ""
   },
   {
     "name": "lifetime_uaf_alias.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1661871153\n",
+    "stdout": "Accessing alias q after p is freed (UAF)...\nValue: 1481135431\n",
     "stderr": ""
   },
   {
@@ -143,7 +143,7 @@
     "name": "lifetime_uaf_read.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Accessing p after free (UAF)...\nValue: 1635865645\n",
+    "stdout": "Accessing p after free (UAF)...\nValue: 1499339170\n",
     "stderr": ""
   },
   {
@@ -220,7 +220,7 @@
     "name": "prov_ptr_int_roundtrip.c",
     "status": "PASS",
     "exit_code": 0,
-    "stdout": "Roundtrip p -> i -> q: 0x7ffe805afb28 == 0x7ffe805afb28\nSuccess\n",
+    "stdout": "Roundtrip p -> i -> q: 0x7ffc4862cb08 == 0x7ffc4862cb08\nSuccess\n",
     "stderr": ""
   },
   {
@@ -235,6 +235,6 @@
     "status": "TRAP",
     "exit_code": -6,
     "stdout": "",
-    "stderr": "{\"ts\": 1776483721, \"tier\": \"diag\", \"event\": \"init\", \"ptr\": \"0x55dcf36e32a0\", \"grade\": {\"base\": \"0x55dcf36e32a0\", \"end\": \"0x55dcf36e32c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"none\", \"detail\": \"malloc\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\nGOIR TRAP: bounds - OOB load at 0x55dcf36e32c8\n{\"ts\": 1776483721, \"tier\": \"diag\", \"event\": \"check_fail\", \"ptr\": \"0x55dcf36e32c8\", \"grade\": {\"base\": \"0x55dcf36e32a0\", \"end\": \"0x55dcf36e32c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"bounds\", \"detail\": \"OOB load\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\n"
+    "stderr": "{\"ts\": 1781153866, \"tier\": \"diag\", \"event\": \"init\", \"ptr\": \"0x55c8ece592a0\", \"grade\": {\"base\": \"0x55c8ece592a0\", \"end\": \"0x55c8ece592c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"none\", \"detail\": \"malloc\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\nGOIR TRAP: bounds - OOB load at 0x55c8ece592c8\n{\"ts\": 1781153866, \"tier\": \"diag\", \"event\": \"check_fail\", \"ptr\": \"0x55c8ece592c8\", \"grade\": {\"base\": \"0x55c8ece592a0\", \"end\": \"0x55c8ece592c8\", \"alloc_id\": 0, \"epoch\": 0, \"perms\": 0, \"prov_tag\": 0, \"alias_tok\": 0, \"flags\": 1}, \"fail\": {\"component\": \"bounds\", \"detail\": \"OOB load\"}, \"site\": {\"file\": \"unknown\", \"line\": 0, \"fn\": \"unknown\"}}\n"
   }
 ]

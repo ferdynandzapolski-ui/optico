@@ -12,6 +12,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut prov_policy = "0";
     let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
@@ -19,6 +20,8 @@ fn main() {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            prov_policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
@@ -74,9 +77,17 @@ fn main() {
         let output_obj = Path::new(filepath).with_extension("o");
         let output_bin = Path::new(filepath).with_extension("bin");
 
+        let tier_val = match tier {
+            "diag" => "0",
+            "hybrid" => "1",
+            "cap" => "2",
+            _ => "0",
+        };
+
         // 1. Run opt with GOIR passes
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
+             .arg(format!("-go-tier={}", tier_val))
              .arg(format!("-passes={}", goir_passes))
              .arg("-S")
              .arg(&llvm_path)
@@ -112,7 +123,7 @@ fn main() {
                         if let Ok(s3) = clang_status {
                             if s3.success() {
                                 println!("  [3/3] clang: Linked executable -> {:?}", output_bin);
-                                println!("\nCompilation complete. Run with: LD_LIBRARY_PATH=build/runtime {:?}", output_bin);
+                                println!("\nCompilation complete. Run with: GOIR_PROV_POLICY={} LD_LIBRARY_PATH=build/runtime {:?}", prov_policy, output_bin);
                             } else {
                                 eprintln!("  [3/3] clang: Linking failed");
                             }
