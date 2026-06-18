@@ -43,6 +43,9 @@ go_grade_t __go_shadow_load(void* slot_addr);
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind);
+void __go_memset(void* dst, go_grade_t gdst, int v, size_t n);
 
 #ifdef __cplusplus
 }
