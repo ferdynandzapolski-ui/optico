@@ -287,6 +287,7 @@ impl CodeGenerator {
             Type::Void => "void",
             Type::Char => "i8",
             Type::Bool => "i1",
+            Type::Pointer(_, _, _) => "ptr",
             _ => "i32", // Default
         }
     }

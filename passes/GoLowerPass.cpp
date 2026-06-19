@@ -29,6 +29,11 @@ PreservedAnalyses GoLowerPass::run(Module &M, ModuleAnalysisManager &AM) {
     ReplaceCall("llvm.go.gep_grade", "__go_gep_grade");
     ReplaceCall("llvm.go.join_grade", "__go_join_grade");
 
+    ReplaceCall("llvm.go.prov_expose", "__go_prov_expose");
+    ReplaceCall("llvm.go.inttoptr_resolve", "__go_inttoptr_resolve");
+    ReplaceCall("llvm.go.shadow_store", "__go_shadow_store");
+    ReplaceCall("llvm.go.shadow_load", "__go_shadow_load");
+
     return PreservedAnalyses::none();
 }
 
