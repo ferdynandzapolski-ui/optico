@@ -11,8 +11,11 @@ struct GoCheckInsertPass : public PassInfoMixin<GoCheckInsertPass> {
     FunctionCallee CheckLoadFn = nullptr;
     FunctionCallee CheckStoreFn = nullptr;
     FunctionCallee CheckFreeFn = nullptr;
+    FunctionCallee ShadowStoreFn = nullptr;
+    FunctionCallee ShadowLoadFn = nullptr;
 
     void ensureTypes(Module &M);
+    Value* getTOP(Module &M);
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 

@@ -43,6 +43,13 @@ go_grade_t __go_shadow_load(void* slot_addr);
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind);
+void __go_memset(void* dst, go_grade_t g, int val, size_t n);
+
+// Provenance hooks
+void __go_prov_expose(const void* p, go_grade_t g, uint32_t site);
+go_grade_t __go_inttoptr_resolve(uintptr_t i, uint32_t policy, uint32_t site);
 
 #ifdef __cplusplus
 }
