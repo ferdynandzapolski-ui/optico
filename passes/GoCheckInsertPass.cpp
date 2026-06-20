@@ -29,6 +29,22 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckLoadFn = M.getOrInsertFunction("llvm.go.check_load", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckStoreFn = M.getOrInsertFunction("llvm.go.check_store", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ShadowStoreFn = M.getOrInsertFunction("llvm.go.shadow_store", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ShadowLoadFn = M.getOrInsertFunction("llvm.go.shadow_load", GradeTy, PtrTy);
+}
+
+Value* GoCheckInsertPass::getTOP(Module &M) {
+    LLVMContext &Ctx = M.getContext();
+    return ConstantStruct::get(cast<StructType>(GradeTy), {
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+    });
 }
 
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -54,11 +70,21 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                         uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
                         Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
                     }
+                    if (LI->getType()->isPointerTy()) {
+                        Value *LG = Builder.CreateCall(ShadowLoadFn, {Ptr}, "g_load");
+                        LI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(LG)));
+                    }
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
+                    Value *Val = SI->getValueOperand();
                     if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
+                        uint64_t Size = M.getDataLayout().getTypeStoreSize(Val->getType());
                         Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+                    }
+                    if (Val->getType()->isPointerTy()) {
+                        Value *VG = getGrade(Val);
+                        if (!VG) VG = getTOP(M);
+                        Builder.CreateCall(ShadowStoreFn, {Ptr, VG});
                     }
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();

@@ -125,4 +125,53 @@ void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
     __go_check_store(dst, gdst, n);
     __go_check_load(src, gsrc, n);
     memcpy(dst, src, n);
+
+    // Metadata propagation (Hybrid tier)
+    if (layout_kind == 0) { // Default: check if we should propagate based on alignment
+        for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+            go_grade_t sg = __go_shadow_load((void*)((uintptr_t)src + i));
+            if (sg.end != -1ULL) { // Non-TOP grade found
+                __go_shadow_store((void*)((uintptr_t)dst + i), sg);
+            }
+        }
+    }
+}
+
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind) {
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+    memmove(dst, src, n);
+
+    // Metadata propagation (Hybrid tier)
+    if (layout_kind == 0) {
+        for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+            go_grade_t sg = __go_shadow_load((void*)((uintptr_t)src + i));
+            if (sg.end != -1ULL) {
+                __go_shadow_store((void*)((uintptr_t)dst + i), sg);
+            }
+        }
+    }
+}
+
+void __go_memset(void* dst, go_grade_t g, int val, size_t n) {
+    __go_check_store(dst, g, n);
+    memset(dst, val, n);
+    // Clear metadata in the range
+    for (size_t i = 0; i + sizeof(void*) <= n; i += sizeof(void*)) {
+        go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
+        __go_shadow_store((void*)((uintptr_t)dst + i), g_top);
+    }
+}
+
+void __go_prov_expose(const void* p, go_grade_t g, uint32_t site) {
+    // PNVI policy hook: mark as exposed if needed
+    __go_trace_event(GO_EVENT_MEMCPY_TAINT, p, g, "prov_expose", "pointer exposed to integer", dummy_site);
+}
+
+go_grade_t __go_inttoptr_resolve(uintptr_t i, uint32_t policy, uint32_t site) {
+    // Minimal PNVI resolution: for now, return TOP grade.
+    // In a full implementation, we'd look up 'i' in a global allocation registry.
+    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
+    return g_top;
 }

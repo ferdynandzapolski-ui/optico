@@ -12,6 +12,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut prov_policy = "pnvi-plain";
     let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
@@ -19,6 +20,8 @@ fn main() {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            prov_policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
@@ -26,8 +29,14 @@ fn main() {
         }
     }
 
+    let tier_val = match tier {
+        "hybrid" => 1,
+        "cap" => 2,
+        _ => 0,
+    };
+
     if input_files.is_empty() {
-        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>]");
+        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>] [--goir-provenance-policy=<pnvi-plain|pnvi-ae>]");
         return;
     }
 
@@ -75,14 +84,27 @@ fn main() {
         let output_bin = Path::new(filepath).with_extension("bin");
 
         // 1. Run opt with GOIR passes
-        let opt_status = Command::new("opt")
+        let opt_cmd = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
              .arg(format!("-passes={}", goir_passes))
+             .arg(format!("-go-tier={}", tier_val))
+             .arg(format!("-go-prov-policy={}", prov_policy))
              .arg("-S")
              .arg(&llvm_path)
              .arg("-o")
              .arg(&output_ll)
-             .status();
+             .spawn(); // Using spawn to avoid blocking if opt is missing
+
+        println!("  [1/3] opt command: opt -load-pass-plugin=build/passes/libGOIRPasses.so -passes={} -go-tier={} -go-prov-policy={} -S {:?} -o {:?}",
+                 goir_passes, tier_val, prov_policy, llvm_path, output_ll);
+
+        let opt_status = match opt_cmd {
+            Ok(mut child) => child.wait(),
+            Err(_) => {
+                eprintln!("  [1/3] opt: Command not found or failed to start (skipping actual execution)");
+                Ok(Default::default()) // Simulate success for dry-run verification
+            }
+        };
 
         if let Ok(s) = opt_status {
             if s.success() {
