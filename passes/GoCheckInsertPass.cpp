@@ -5,6 +5,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/DiagnosticInfo.h"
 
 using namespace llvm;
 
@@ -29,6 +30,22 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckLoadFn = M.getOrInsertFunction("llvm.go.check_load", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckStoreFn = M.getOrInsertFunction("llvm.go.check_store", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ShadowLoadFn = M.getOrInsertFunction("llvm.go.shadow_load", GradeTy, PtrTy);
+    ShadowStoreFn = M.getOrInsertFunction("llvm.go.shadow_store", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+}
+
+Value* GoCheckInsertPass::getTOP(Module &M) {
+    LLVMContext &Ctx = M.getContext();
+    return ConstantStruct::get(cast<StructType>(GradeTy), {
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+    });
 }
 
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -45,20 +62,34 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
                             return cast<ValueAsMetadata>(cast<MDNode>(MD)->getOperand(0))->getValue();
                         }
                     }
-                    return nullptr;
+                    I.getContext().diagnose(OptimizationRemark("go-check-insert", "Remark", I.getDebugLoc(), I.getParent())
+                        << "Missing grade for pointer; using TOP");
+                    return getTOP(M);
                 };
 
                 if (auto *LI = dyn_cast<LoadInst>(&I)) {
                     Value *Ptr = LI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
-                        Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
+                    Value *G = getGrade(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
+                    Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
+
+                    // If loaded value is a pointer, load its grade from shadow store
+                    if (LI->getType()->isPointerTy()) {
+                        Builder.SetInsertPoint(LI->getNextNode());
+                        Value *GVal = Builder.CreateCall(ShadowLoadFn, {Ptr}, "g_load");
+                        LI->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(GVal)));
                     }
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
-                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+                    Value *G = getGrade(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
+                    Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
+
+                    // If stored value is a pointer, store its grade to shadow store
+                    Value *V = SI->getValueOperand();
+                    if (V->getType()->isPointerTy()) {
+                        Value *GV = getGrade(V);
+                        Builder.CreateCall(ShadowStoreFn, {Ptr, GV});
                     }
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();

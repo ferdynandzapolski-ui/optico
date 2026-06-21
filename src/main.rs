@@ -12,6 +12,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut prov_policy = "pnvi-plain";
     let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
@@ -19,6 +20,8 @@ fn main() {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            prov_policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
@@ -27,7 +30,7 @@ fn main() {
     }
 
     if input_files.is_empty() {
-        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>]");
+        eprintln!("Usage: optico <file1.oco> [file2.oco ...] [--goir-tier=<diag|hybrid|cap>] [--goir-provenance-policy=<pnvi-plain|pnvi-ae>]");
         return;
     }
 
@@ -75,9 +78,17 @@ fn main() {
         let output_bin = Path::new(filepath).with_extension("bin");
 
         // 1. Run opt with GOIR passes
+        let tier_val = match tier {
+            "diag" => "0",
+            "hybrid" => "1",
+            "cap" => "2",
+            _ => "0",
+        };
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
              .arg(format!("-passes={}", goir_passes))
+             .arg(format!("-go-tier={}", tier_val))
+             .arg(format!("-go-prov-policy={}", prov_policy))
              .arg("-S")
              .arg(&llvm_path)
              .arg("-o")
