@@ -11,6 +11,8 @@ using namespace llvm;
 
 static cl::opt<int> GoTier("go-tier", cl::init(0),
   cl::desc("GOIR enforcement tier (0: diag, 1: hybrid, 2: cap)"));
+static cl::opt<std::string> GoProvPolicy("go-prov-policy", cl::init("pnvi-plain"),
+  cl::desc("GOIR provenance policy (pnvi-plain, pnvi-ae)"));
 
 namespace llvm {
 
@@ -46,6 +48,7 @@ namespace llvm {
     errs() << "GoInitPass running on module: " << M.getName() << " with tier " << GoTier << "\n";
 
     M.addModuleFlag(Module::Error, "go-tier", GoTier);
+    M.addModuleFlag(Module::Error, "go-prov-policy", MDString::get(M.getContext(), GoProvPolicy));
     ensureTypes(M);
 
     for (Function &F : M) {
