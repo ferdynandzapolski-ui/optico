@@ -24,6 +24,7 @@ typedef struct {
     uint32_t prov_tag;
     uint64_t alias_tok;
     uint32_t flags;      // includes version, bounds-kind, exposed
+    uint32_t padding;    // explicit padding for 48-byte struct
 } go_grade_t;
 
 // Allocation wrappers
@@ -43,6 +44,8 @@ go_grade_t __go_shadow_load(void* slot_addr);
 // memcpy policy
 void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
                  size_t n, uint32_t layout_kind);
+
+#include "go_shadow.h"
 
 #ifdef __cplusplus
 }
