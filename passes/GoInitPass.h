@@ -10,6 +10,8 @@ struct GoInitPass : public PassInfoMixin<GoInitPass> {
   FunctionCallee GradeFromAllocaFn = nullptr;
   FunctionCallee GradeFromMallocFn = nullptr;
 
+    static cl::opt<int> GoProvPolicy;
+
   void ensureTypes(Module &M);
   void emitRemark(Instruction *I, StringRef Message);
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);

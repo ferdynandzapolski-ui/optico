@@ -24,6 +24,8 @@ PreservedAnalyses GoLowerPass::run(Module &M, ModuleAnalysisManager &AM) {
     ReplaceCall("llvm.go.check_load", "__go_check_load");
     ReplaceCall("llvm.go.check_store", "__go_check_store");
     ReplaceCall("llvm.go.check_free", "__go_check_free");
+    ReplaceCall("llvm.go.prov_expose", "__go_prov_expose");
+    ReplaceCall("llvm.go.inttoptr_resolve", "__go_inttoptr_resolve");
     ReplaceCall("llvm.go.grade_from_alloca", "__go_grade_from_alloca");
     ReplaceCall("llvm.go.grade_from_malloc", "__go_grade_from_malloc");
     ReplaceCall("llvm.go.gep_grade", "__go_gep_grade");

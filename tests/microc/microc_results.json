@@ -1,0 +1,17 @@
+[
+  {
+    "name": "identity.c",
+    "status": "RUN_FAIL",
+    "error": "[Errno 2] No such file or directory: 'identity.bin'"
+  },
+  {
+    "name": "arithmetic.c",
+    "status": "RUN_FAIL",
+    "error": "[Errno 2] No such file or directory: 'arithmetic.bin'"
+  },
+  {
+    "name": "struct.c",
+    "status": "RUN_FAIL",
+    "error": "[Errno 2] No such file or directory: 'struct.bin'"
+  }
+]
