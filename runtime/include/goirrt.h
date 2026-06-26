@@ -24,6 +24,7 @@ typedef struct {
     uint32_t prov_tag;
     uint64_t alias_tok;
     uint32_t flags;      // includes version, bounds-kind, exposed
+    uint32_t _pad;       // explicit padding for 48-byte record size
 } go_grade_t;
 
 // Allocation wrappers
