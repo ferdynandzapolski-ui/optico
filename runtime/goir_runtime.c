@@ -126,3 +126,48 @@ void __go_memcpy(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
     __go_check_load(src, gsrc, n);
     memcpy(dst, src, n);
 }
+
+void __go_memmove(void* dst, go_grade_t gdst, const void* src, go_grade_t gsrc,
+                  size_t n, uint32_t layout_kind) {
+    __go_check_store(dst, gdst, n);
+    __go_check_load(src, gsrc, n);
+    memmove(dst, src, n);
+}
+
+void __go_memset(void* dst, go_grade_t gdst, int v, size_t n) {
+    __go_check_store(dst, gdst, n);
+    memset(dst, v, n);
+}
+
+// Provenance Policy
+#define MAX_EXPOSURES 1024
+static struct { void* p; go_grade_t g; } exposure_set[MAX_EXPOSURES];
+static int exposure_count = 0;
+
+void __go_prov_expose(void* p, go_grade_t g) {
+    if (exposure_count < MAX_EXPOSURES) {
+        exposure_set[exposure_count].p = p;
+        exposure_set[exposure_count].g = g;
+        exposure_count++;
+    }
+}
+
+inttoptr_res_t __go_inttoptr_resolve(uint64_t i, uint32_t policy) {
+    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
+    inttoptr_res_t res = {(void*)i, g_top};
+
+    // policy 0: PNVI-plain (resolve if within live allocation - simplification: use exposure set)
+    // policy 1: PNVI-ae (resolve only if previously exposed)
+    for (int idx = 0; idx < exposure_count; ++idx) {
+        if (i >= exposure_set[idx].g.base && i < exposure_set[idx].g.end) {
+            res.g = exposure_set[idx].g;
+            return res;
+        }
+    }
+
+    if (policy == 1) { // PNVI-ae: Trap if not resolved
+        go_trap("provenance", "PNVI-ae violation: inttoptr for unexposed address", (void*)i, g_top);
+    }
+
+    return res;
+}

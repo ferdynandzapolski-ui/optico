@@ -29,6 +29,24 @@ void GoCheckInsertPass::ensureTypes(Module &M) {
     CheckLoadFn = M.getOrInsertFunction("llvm.go.check_load", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckStoreFn = M.getOrInsertFunction("llvm.go.check_store", Type::getVoidTy(Ctx), PtrTy, GradeTy, SizeTy);
     CheckFreeFn = M.getOrInsertFunction("llvm.go.check_free", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+    ProvExposeFn = M.getOrInsertFunction("llvm.go.prov_expose", Type::getVoidTy(Ctx), PtrTy, GradeTy);
+
+    Type *IntPtrResTy = StructType::get(Ctx, {PtrTy, GradeTy});
+    IntToPtrResolveFn = M.getOrInsertFunction("llvm.go.inttoptr_resolve", IntPtrResTy, SizeTy, Type::getInt32Ty(Ctx));
+}
+
+Value* GoCheckInsertPass::getTOP(Module &M, IRBuilder<> &Builder) {
+    LLVMContext &Ctx = M.getContext();
+    return ConstantStruct::get(cast<StructType>(GradeTy), {
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), -1ULL),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0xF),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt64Ty(Ctx), 0),
+        ConstantInt::get(Type::getInt32Ty(Ctx), 0)
+    });
 }
 
 PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
@@ -39,35 +57,53 @@ PreservedAnalyses GoCheckInsertPass::run(Module &M, ModuleAnalysisManager &AM) {
             for (Instruction &I : llvm::make_early_inc_range(BB)) {
                 IRBuilder<> Builder(&I);
 
-                auto getGrade = [&](Value *Ptr) -> Value* {
+                auto getGradeOrTOP = [&](Value *Ptr) -> Value* {
                     if (auto *Inst = dyn_cast<Instruction>(Ptr)) {
                         if (auto *MD = Inst->getMetadata("go.grade")) {
                             return cast<ValueAsMetadata>(cast<MDNode>(MD)->getOperand(0))->getValue();
                         }
                     }
-                    return nullptr;
+                    return getTOP(M, Builder);
                 };
 
                 if (auto *LI = dyn_cast<LoadInst>(&I)) {
                     Value *Ptr = LI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
-                        Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGradeOrTOP(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(LI->getType());
+                    Builder.CreateCall(CheckLoadFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
                     Value *Ptr = SI->getPointerOperand();
-                    if (Value *G = getGrade(Ptr)) {
-                        uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
-                        Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
-                    }
+                    Value *G = getGradeOrTOP(Ptr);
+                    uint64_t Size = M.getDataLayout().getTypeStoreSize(SI->getValueOperand()->getType());
+                    Builder.CreateCall(CheckStoreFn, {Ptr, G, Builder.getInt64(Size)});
                 } else if (auto *CI = dyn_cast<CallInst>(&I)) {
                     Function *Callee = CI->getCalledFunction();
                     if (Callee && Callee->getName() == "free") {
                         Value *Ptr = CI->getArgOperand(0);
-                        if (Value *G = getGrade(Ptr)) {
-                            Builder.CreateCall(CheckFreeFn, {Ptr, G});
-                        }
+                        Value *G = getGradeOrTOP(Ptr);
+                        Builder.CreateCall(CheckFreeFn, {Ptr, G});
                     }
+                } else if (auto *PTI = dyn_cast<PtrToIntInst>(&I)) {
+                    Value *Ptr = PTI->getPointerOperand();
+                    Value *G = getGradeOrTOP(Ptr);
+                    Builder.CreateCall(ProvExposeFn, {Ptr, G});
+                } else if (auto *ITP = dyn_cast<IntToPtrInst>(&I)) {
+                    Value *IntVal = ITP->getOperand(0);
+                    // Use PNVI policy from module flag if present, default to 0 (PNVI-plain)
+                    int Policy = 0;
+                    if (auto *PolicyFlag = mdconst::extract_or_null<ConstantInt>(M.getModuleFlag("go-prov-policy"))) {
+                        Policy = PolicyFlag->getZExtValue();
+                    }
+
+                    Value *Res = Builder.CreateCall(IntToPtrResolveFn, {IntVal, Builder.getInt32(Policy)});
+                    Value *NewPtr = Builder.CreateExtractValue(Res, {0}, "p_resolved");
+                    Value *NewGrade = Builder.CreateExtractValue(Res, {1}, "g_resolved");
+
+                    ITP->replaceAllUsesWith(NewPtr);
+                    if (auto *NewPtrInst = dyn_cast<Instruction>(NewPtr)) {
+                        NewPtrInst->setMetadata("go.grade", MDNode::get(M.getContext(), ValueAsMetadata::get(NewGrade)));
+                    }
+                    ITP->eraseFromParent();
                 }
             }
         }

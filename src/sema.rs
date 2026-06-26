@@ -637,6 +637,12 @@ impl Sema {
                     _ => panic!("Index requires pointer or traversal type, found {:?}", ty1),
                 }
             }
+            Expr::IndexAssign(base, index, value) => {
+                self.check_expr(base, env, res_consumed, local_resources);
+                self.check_expr(index, env, res_consumed, local_resources);
+                self.check_expr(value, env, res_consumed, local_resources);
+                Type::Void
+            }
             Expr::Paren(e) => self.check_expr(e, env, res_consumed, local_resources),
         }
     }

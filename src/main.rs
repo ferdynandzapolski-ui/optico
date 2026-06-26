@@ -12,6 +12,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let mut input_files = Vec::new();
     let mut tier = "diag";
+    let mut prov_policy = "pnvi-plain";
     let mut debug_ast = false;
 
     for arg in args.iter().skip(1) {
@@ -19,6 +20,8 @@ fn main() {
             debug_ast = true;
         } else if arg.starts_with("--goir-tier=") {
             tier = &arg["--goir-tier=".len()..];
+        } else if arg.starts_with("--goir-provenance-policy=") {
+            prov_policy = &arg["--goir-provenance-policy=".len()..];
         } else if arg.starts_with("-") {
             // ignore other flags
         } else {
@@ -69,15 +72,31 @@ fn main() {
 
     if llvm_path.exists() {
         println!("\n--- Driving GOIR Compilation Pipeline ---");
-        let goir_passes = "go-init,go-propagate,go-check-insert,go-mem-intrinsic,go-lower";
+
+        let tier_val = match tier {
+            "hybrid" => 1,
+            "cap" => 2,
+            _ => 0, // diag
+        };
+
+        let prov_policy_val = match prov_policy {
+            "pnvi-ae" => 1,
+            _ => 0, // pnvi-plain
+        };
+
+        let goir_passes = format!("go-init,go-propagate,go-check-insert,go-mem-intrinsic,go-lower");
         let output_ll = Path::new(filepath).with_extension("goir.ll");
         let output_obj = Path::new(filepath).with_extension("o");
         let output_bin = Path::new(filepath).with_extension("bin");
 
         // 1. Run opt with GOIR passes
+        println!("  Executing: opt -load-pass-plugin=build/passes/libGOIRPasses.so -passes={} -go-tier={} -go-prov-policy={} -S {:?} -o {:?}",
+                 goir_passes, tier_val, prov_policy_val, llvm_path, output_ll);
         let opt_status = Command::new("opt")
             .arg("-load-pass-plugin=build/passes/libGOIRPasses.so")
              .arg(format!("-passes={}", goir_passes))
+             .arg(format!("-go-tier={}", tier_val))
+             .arg(format!("-go-prov-policy={}", prov_policy_val))
              .arg("-S")
              .arg(&llvm_path)
              .arg("-o")
