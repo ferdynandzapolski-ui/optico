@@ -1,5 +1,6 @@
 #include "goirrt.h"
 #include "go_trace.h"
+#include "go_shadow.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,7 @@ void* __go_malloc(size_t n, go_grade_t* out_g) {
     if (p) {
         g.base = (uint64_t)p;
         g.end = (uint64_t)p + n;
+        g.perms = 0xF;
         g.flags = GO_BOUNDS_KIND_OBJECT;
     }
     if (out_g) *out_g = g;
@@ -54,6 +56,7 @@ void* __go_realloc(void* p, size_t n, go_grade_t* out_g) {
     if (new_p) {
         g.base = (uint64_t)new_p;
         g.end = (uint64_t)new_p + n;
+        g.perms = 0xF;
         g.flags = GO_BOUNDS_KIND_OBJECT;
     }
     if (out_g) *out_g = g;
@@ -66,6 +69,7 @@ go_grade_t __go_grade_from_alloca(void* p, size_t n) {
     go_grade_t g = {0};
     g.base = (uint64_t)p;
     g.end = (uint64_t)p + n;
+    g.perms = 0xF;
     g.flags = GO_BOUNDS_KIND_OBJECT;
     return g;
 }
@@ -75,9 +79,6 @@ go_grade_t __go_grade_from_malloc(void* p, size_t n) {
 }
 
 go_grade_t __go_gep_grade(go_grade_t g, int64_t offset, int64_t scale) {
-    // Spatial safety: technically, object bounds don't change on GEP.
-    // However, if we wanted to enforce subobject bounds, we would tighten g.base/g.end here.
-    // In this MVP, we preserve object-level bounds for compatibility.
     g.flags |= GO_BOUNDS_KIND_SUBOBJECT;
     return g;
 }
@@ -87,36 +88,6 @@ go_grade_t __go_join_grade(go_grade_t g1, go_grade_t g2) {
     go_grade_t g_top = {0};
     g_top.end = -1ULL;
     g_top.perms = 0xF;
-    return g_top;
-}
-
-// Improved Shadow metadata (hybrid) - Open addressing with linear probing
-#define SHADOW_CAP (1 << 20)
-static struct { void* addr; go_grade_t g; } shadow_map[SHADOW_CAP];
-
-void __go_shadow_store(void* slot_addr, go_grade_t g) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) { // Limited probing
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == NULL || shadow_map[idx].addr == slot_addr) {
-            shadow_map[idx].addr = slot_addr;
-            shadow_map[idx].g = g;
-            return;
-        }
-    }
-    // Fallback: overwrite first slot if full
-    shadow_map[h].addr = slot_addr;
-    shadow_map[h].g = g;
-}
-
-go_grade_t __go_shadow_load(void* slot_addr) {
-    unsigned h = ((uintptr_t)slot_addr >> 3) & (SHADOW_CAP - 1);
-    for (int i = 0; i < 16; ++i) {
-        unsigned idx = (h + i) & (SHADOW_CAP - 1);
-        if (shadow_map[idx].addr == slot_addr) return shadow_map[idx].g;
-        if (shadow_map[idx].addr == NULL) break;
-    }
-    go_grade_t g_top = {0}; g_top.end = -1ULL; g_top.perms = 0xF;
     return g_top;
 }
 
